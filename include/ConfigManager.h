@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 #include <SD_MMC.h>
 #include <SPIFFS.h>
+#include <vector>
 
 #define CONFIG_FILE "/sdcard/config.json"
 #define CONFIG_TEMPLATE "/config.json"

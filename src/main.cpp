@@ -7,18 +7,20 @@
 #include <SPIFFS.h>
 #include <time.h>
 #include <lvgl.h>
-#include <Arduino_GFX_Library.h>
 #include <ESPmDNS.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
-#include <SPIFFSEditor.h>
+#include <AsyncElegantOTA.h>
 #include <Update.h>
 #include <driver/i2s.h>
-#include <AudioGenerator.h>
-#include <AudioOutputI2S.h>
-#include <AudioFileSourceBuffer.h>
-#include <AudioFileSourceICYStream.h>
-#include <AudioFileSourceSD.h>
+#include <TFT_eSPI.h>
+
+// Forward declarations
+class AudioGenerator;
+class AudioOutputI2S;
+class AudioFileSourceBuffer;
+class AudioFileSourceICYStream;
+class AudioFileSourceSD;
 #include <AudioFileSourcePROGMEM.h>
 #include <AudioGeneratorMP3.h>
 #include <Adafruit_SGP30.h>
@@ -98,6 +100,8 @@ Arduino_RGB_Display *gfx = new Arduino_RGB_Display(
 // Global objects
 Adafruit_SGP30 sgp;
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
+
+// Web server instance
 AsyncWebServer server(80);
 
 // Global instances
@@ -110,17 +114,6 @@ AlarmManager& alarmManager = AlarmManager::getInstance();
 TaskHandle_t lvglTaskHandle = nullptr;
 TaskHandle_t mainTaskHandle = nullptr;
 TaskHandle_t audioTaskHandle = nullptr;
-
-// Global instances
-ConfigManager& configManager = ConfigManager::getInstance();
-UIManager& uiManager = UIManager::getInstance();
-AudioManager& audioManager = AudioManager::getInstance();
-AlarmManager& alarmManager = AlarmManager::getInstance();
-
-// Task handles
-TaskHandle_t lvglTaskHandle = NULL;
-TaskHandle_t mainTaskHandle = NULL;
-TaskHandle_t audioTaskHandle = NULL;
 
 // LVGL display buffer
 static lv_disp_draw_buf_t draw_buf;
@@ -165,9 +158,17 @@ void onAlarmTriggered(const Alarm& alarm) {
 void setup() {
     Serial.begin(115200);
     
+    // Initialize SPIFFS
+    if (!SPIFFS.begin(true)) {
+        Serial.println("An error occurred while mounting SPIFFS");
+    } else {
+        Serial.println("SPIFFS mounted successfully");
+    }
+    
     // Initialize display
-    gfx->begin();
-    gfx->fillScreen(BLACK);
+    tft.init();
+    tft.setRotation(1);
+    tft.fillScreen(TFT_BLACK);
     
     // Initialize LVGL
     lvgl_init();
@@ -252,12 +253,18 @@ void loop() {
 }
 
 void lvgl_init() {
+  // Initialize LVGL
   lv_init();
   
   // Initialize display buffer
   lv_disp_draw_buf_init(&draw_buf, buf1, buf2, 800 * 10);
   
-  // Initialize display
+  // Initialize TFT
+  tft.begin();
+  tft.setRotation(1); // Landscape orientation
+  tft.fillScreen(TFT_BLACK);
+  
+  // Initialize display driver
   static lv_disp_drv_t disp_drv;
   lv_disp_drv_init(&disp_drv);
   disp_drv.hor_res = 800;
@@ -265,25 +272,31 @@ void lvgl_init() {
   disp_drv.flush_cb = [](lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p) {
     uint32_t w = (area->x2 - area->x1 + 1);
     uint32_t h = (area->y2 - area->y1 + 1);
-    gfx->draw16bitRGBBitmap(area->x1, area->y1, (uint16_t *)color_p, w, h);
+    
+    tft.startWrite();
+    tft.setAddrWindow(area->x1, area->y1, w, h);
+    tft.pushColors((uint16_t *)color_p, w * h, true);
+    tft.endWrite();
+    
     lv_disp_flush_ready(disp);
   };
   disp_drv.draw_buf = &draw_buf;
   lv_disp_drv_register(&disp_drv);
   
-  // Initialize touch
+  // Initialize touch (GT911)
   static lv_indev_drv_t indev_drv;
   lv_indev_drv_init(&indev_drv);
   indev_drv.type = LV_INDEV_TYPE_POINTER;
   indev_drv.read_cb = [](lv_indev_drv_t *drv, lv_indev_data_t *data) {
     static int16_t last_x = 0;
     static int16_t last_y = 0;
+    uint8_t touched = 0;
     
-    // TODO: Read touch position from GT911
-    // For now, just return the last position
+    // TODO: Implement GT911 touch reading
+    // For now, simulate no touch
     data->point.x = last_x;
     data->point.y = last_y;
-    data->state = LV_INDEV_STATE_REL;  // or LV_INDEV_STATE_PR
+    data->state = LV_INDEV_STATE_REL;
     
     return false;
   };
@@ -365,7 +378,21 @@ void audio_init() {
 }
 
 void web_server_init() {
-  // TODO: Initialize web server for configuration and OTA
+  // Serve static files from SPIFFS
+  server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
+  
+  // Handle file not found
+  server.onNotFound([](AsyncWebServerRequest *request) {
+    request->send(404, "text/plain", "File Not Found");
+  });
+  
+  // Start server
+  server.begin();
+  
+  // Start ElegantOTA
+  AsyncElegantOTA.begin(&server);
+  
+  Serial.println("HTTP server started");
 }
 
 void lvgl_tick(void *parameter) {

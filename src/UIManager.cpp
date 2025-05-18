@@ -1,7 +1,88 @@
+#include "UIManager.h"
+#include <TFT_eSPI.h>
+#include <lvgl.h>
+#include <Arduino.h>
+
+extern TFT_eSPI tft;
+
+void UIManager::begin() {
+    // Initialize display
+    tft.begin();
+    tft.setRotation(1);  // Adjust rotation as needed
+    tft.fillScreen(TFT_BLACK);
+    
+    // Initialize LVGL
+    lv_init();
+    
+    // Initialize display buffer
+    static lv_disp_draw_buf_t draw_buf;
+    static lv_color_t buf1[TFT_WIDTH * 10];  // Adjust buffer size as needed
+    lv_disp_draw_buf_init(&draw_buf, buf1, NULL, TFT_WIDTH * 10);
+    
+    // Initialize the display
+    static lv_disp_drv_t disp_drv;
+    lv_disp_drv_init(&disp_drv);
+    disp_drv.hor_res = TFT_WIDTH;
+    disp_drv.ver_res = TFT_HEIGHT;
+    disp_drv.flush_cb = [](lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p) {
+        uint32_t w = (area->x2 - area->x1 + 1);
+        uint32_t h = (area->y2 - area->y1 + 1);
+        tft.startWrite();
+        tft.setAddrWindow(area->x1, area->y1, w, h);
+        tft.pushColors((uint16_t *)&color_p->full, w * h, true);
+        tft.endWrite();
+        lv_disp_flush_ready(disp);
+    };
+    disp_drv.draw_buf = &draw_buf;
+    lv_disp_drv_register(&disp_drv);
+    
+    // Initialize touch
+    static lv_indev_drv_t indev_drv;
+    lv_indev_drv_init(&indev_drv);
+    indev_drv.type = LV_INDEV_TYPE_POINTER;
+    indev_drv.read_cb = [](lv_indev_drv_t *drv, lv_indev_data_t *data) {
+        uint16_t touchX, touchY;
+        bool touched = tft.getTouch(&touchX, &touchY);
+        if (touched) {
+            data->point.x = touchX;
+            data->point.y = touchY;
+            data->state = LV_INDEV_STATE_PRESSED;
+        } else {
+            data->state = LV_INDEV_STATE_RELEASED;
+        }
+    };
+    lv_indev_drv_register(&indev_drv);
+    
+    // Initialize theme
+    initTheme();
+    
+    // Create screens
+    createHomeScreen();
+    createAlarmSettingsScreen();
+    createRadioScreen();
+    createSettingsScreen();
+    
+    // Show home screen by default
+    showHomeScreen();
+}
+
+void UIManager::createRadioScreen() {
+    radioScreen = lv_obj_create(NULL);
+    lv_obj_clear_flag(radioScreen, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_color(radioScreen, lv_color_black(), LV_PART_MAIN);
+    
+    // Volume slider
+    lv_obj_t* volumeSlider = lv_slider_create(radioScreen);
     lv_obj_align(volumeSlider, LV_ALIGN_BOTTOM_MID, 0, -30);
     lv_slider_set_range(volumeSlider, 0, 100);
     lv_slider_set_value(volumeSlider, 70, LV_ANIM_OFF);
-    lv_obj_add_event_cb(volumeSlider, volume_changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_add_event_cb(volumeSlider, [](lv_event_t* e) {
+        lv_obj_t* slider = lv_event_get_target(e);
+        int32_t volume = lv_slider_get_value(slider);
+        if (uiManager.volumeCallback) {
+            uiManager.volumeCallback(volume);
+        }
+    }, LV_EVENT_VALUE_CHANGED, NULL);
     
     // Volume icon
     lv_obj_t* volIcon = lv_label_create(radioScreen);
@@ -215,4 +296,136 @@ void UIManager::updateVolume(uint8_t volume) {
 void UIManager::updateBrightness(uint8_t brightness) {
     // Update display brightness
     ledcWrite(0, map(brightness, 0, 100, 0, 255));
+}
+
+void UIManager::initTheme() {
+    // Initialize styles
+    lv_style_init(&timeStyle);
+    lv_style_set_text_font(&timeStyle, &lv_font_montserrat_48);
+    lv_style_set_text_color(&timeStyle, lv_color_white());
+    
+    lv_style_init(&dateStyle);
+    lv_style_set_text_font(&dateStyle, &lv_font_montserrat_24);
+    lv_style_set_text_color(&dateStyle, lv_color_white());
+    
+    lv_style_init(&infoStyle);
+    lv_style_set_text_font(&infoStyle, &lv_font_montserrat_20);
+    lv_style_set_text_color(&infoStyle, lv_color_white());
+    
+    lv_style_init(&buttonStyle);
+    lv_style_set_radius(&buttonStyle, 10);
+    lv_style_set_bg_opa(&buttonStyle, LV_OPA_30);
+    lv_style_set_bg_color(&buttonStyle, lv_color_white());
+    lv_style_set_border_width(&buttonStyle, 0);
+    
+    lv_style_init(&buttonPressedStyle);
+    lv_style_set_bg_opa(&buttonPressedStyle, LV_OPA_50);
+}
+
+void UIManager::createHomeScreen() {
+    homeScreen = lv_obj_create(NULL);
+    lv_obj_clear_flag(homeScreen, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_color(homeScreen, lv_color_black(), LV_PART_MAIN);
+    
+    // Time label
+    timeLabel = lv_label_create(homeScreen);
+    lv_obj_add_style(timeLabel, &timeStyle, 0);
+    lv_label_set_text(timeLabel, "--:--");
+    lv_obj_align(timeLabel, LV_ALIGN_TOP_MID, 0, 40);
+    
+    // Date label
+    dateLabel = lv_label_create(homeScreen);
+    lv_obj_add_style(dateLabel, &dateStyle, 0);
+    lv_label_set_text(dateLabel, "--.--.----");
+    lv_obj_align_to(dateLabel, timeLabel, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
+    
+    // Weather info
+    weatherIcon = lv_label_create(homeScreen);
+    lv_obj_add_style(weatherIcon, &infoStyle, 0);
+    lv_label_set_text(weatherIcon, "☀️");
+    lv_obj_align(weatherIcon, LV_ALIGN_TOP_RIGHT, -20, 20);
+    
+    tempLabel = lv_label_create(homeScreen);
+    lv_obj_add_style(tempLabel, &infoStyle, 0);
+    lv_label_set_text(tempLabel, "--°C");
+    lv_obj_align_to(tempLabel, weatherIcon, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 5);
+    
+    // Air quality info
+    tvocLabel = lv_label_create(homeScreen);
+    lv_obj_add_style(tvocLabel, &infoStyle, 0);
+    lv_label_set_text(tvocLabel, "TVOC: -- ppb");
+    lv_obj_align(tvocLabel, LV_ALIGN_BOTTOM_LEFT, 20, -80);
+    
+    eco2Label = lv_label_create(homeScreen);
+    lv_obj_add_style(eco2Label, &infoStyle, 0);
+    lv_label_set_text(eco2Label, "eCO2: -- ppm");
+    lv_obj_align_to(eco2Label, tvocLabel, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 5);
+    
+    humidityLabel = lv_label_create(homeScreen);
+    lv_obj_add_style(humidityLabel, &infoStyle, 0);
+    lv_label_set_text(humidityLabel, "Humidity: --%");
+    lv_obj_align_to(humidityLabel, eco2Label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 5);
+    
+    // Next alarm
+    nextAlarmLabel = lv_label_create(homeScreen);
+    lv_obj_add_style(nextAlarmLabel, &infoStyle, 0);
+    lv_label_set_text(nextAlarmLabel, "Alarm: --:--");
+    lv_obj_align(nextAlarmLabel, LV_ALIGN_BOTTOM_MID, 0, -20);
+}
+
+void UIManager::createAlarmSettingsScreen() {
+    alarmSettingsScreen = lv_obj_create(NULL);
+    lv_obj_clear_flag(alarmSettingsScreen, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_color(alarmSettingsScreen, lv_color_black(), LV_PART_MAIN);
+    
+    // Back button
+    lv_obj_t* btnBack = lv_btn_create(alarmSettingsScreen);
+    lv_obj_add_style(btnBack, &buttonStyle, 0);
+    lv_obj_add_style(btnBack, &buttonPressedStyle, LV_STATE_PRESSED);
+    lv_obj_set_size(btnBack, 80, 40);
+    lv_obj_align(btnBack, LV_ALIGN_TOP_LEFT, 10, 10);
+    
+    lv_obj_t* label = lv_label_create(btnBack);
+    lv_label_set_text(label, LV_SYMBOL_LEFT);
+    lv_obj_center(label);
+    lv_obj_add_event_cb(btnBack, [](lv_event_t* e) {
+        uiManager.showHomeScreen();
+    }, LV_EVENT_CLICKED, NULL);
+    
+    // Title
+    lv_obj_t* title = lv_label_create(alarmSettingsScreen);
+    lv_obj_add_style(title, &infoStyle, 0);
+    lv_label_set_text(title, "Alarm Settings");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 20);
+    
+    // Time picker
+    lv_obj_t* timePicker = lv_roller_create(alarmSettingsScreen);
+    lv_roller_set_options(timePicker, "00:00\n01:00\n02:00\n03:00\n04:00\n05:00\n06:00\n07:00\n08:00\n09:00\n10:00\n11:00\n12:00\n13:00\n14:00\n15:00\n16:00\n17:00\n18:00\n19:00\n20:00\n21:00\n22:00\n23:00", LV_ROLLER_MODE_NORMAL);
+    lv_obj_align(timePicker, LV_ALIGN_TOP_MID, 0, 70);
+    lv_roller_set_visible_row_count(timePicker, 3);
+    
+    // Day buttons
+    const char* days[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+    for (int i = 0; i < 7; i++) {
+        lv_obj_t* btn = lv_btn_create(alarmSettingsScreen);
+        lv_obj_add_style(btn, &buttonStyle, 0);
+        lv_obj_add_style(btn, &buttonPressedStyle, LV_STATE_PRESSED);
+        lv_obj_set_size(btn, 40, 40);
+        lv_obj_align(btn, LV_ALIGN_TOP_LEFT, 50 + i * 45, 180);
+        
+        label = lv_label_create(btn);
+        lv_label_set_text(label, days[i]);
+        lv_obj_center(label);
+    }
+    
+    // Save button
+    lv_obj_t* btnSave = lv_btn_create(alarmSettingsScreen);
+    lv_obj_add_style(btnSave, &buttonStyle, 0);
+    lv_obj_add_style(btnSave, &buttonPressedStyle, LV_STATE_PRESSED);
+    lv_obj_set_size(btnSave, 200, 50);
+    lv_obj_align(btnSave, LV_ALIGN_BOTTOM_MID, 0, -30);
+    
+    label = lv_label_create(btnSave);
+    lv_label_set_text(label, "Save Alarm");
+    lv_obj_center(label);
 }

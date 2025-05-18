@@ -45,25 +45,17 @@ bool AudioManager::playStream(const char* url) {
     try {
         // Create stream source
         auto* stream = new AudioFileSourceICYStream(url);
-        stream->RegisterMetadata(
+        stream->RegisterMetadataCB(
             [](void* cbData, const char* type, bool isUnicode, const char* str) {
                 const char* ptr = reinterpret_cast<const char*>(cbData);
                 Serial.printf("METADATA(%s) '%s' = '%s'\n", ptr, type, str);
             }, (void*)"ICY");
 
-        // Create buffered source
+        // Create buffered source with default settings
         bufferedSource = new AudioFileSourceBuffer(stream, bufferSize);
-        bufferedSource->registerPreFillCallback(
-            [](void* userdata, AudioFileSourceBuffer::PreFillStatus status, int32_t bytesAvailable, uint32_t bytesAdded) {
-                auto* mgr = static_cast<AudioManager*>(userdata);
-                if (status == AudioFileSourceBuffer::PreFillStatus::FILLING) {
-                    float percentFilled = (bytesAvailable * 100.0) / mgr->bufferSize;
-                    if (percentFilled >= mgr->preBufferPercent) {
-                        return true;  // Start playback
-                    }
-                }
-                return false;  // Continue buffering
-            }, this);
+        
+        // Buffer handling is now done internally by AudioFileSourceBuffer
+        // The callback is no longer needed as the buffer management is automatic
         
         // Create MP3 decoder
         audioGenerator = new AudioGeneratorMP3();

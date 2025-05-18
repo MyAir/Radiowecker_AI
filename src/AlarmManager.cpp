@@ -252,7 +252,7 @@ void AlarmManager::loadAlarms() {
         return;
     }
     
-    File file = SD_MMC.open(/alarms.json", FILE_READ);
+    File file = SD_MMC.open("/alarms.json", FILE_READ);
     if (!file) {
         Serial.println("No alarms.json file found, starting with no alarms");
         return;

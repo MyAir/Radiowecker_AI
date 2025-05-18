@@ -156,7 +156,7 @@ bool ConfigManager::saveConfig() {
         SD_MMC.remove(CONFIG_FILE);
     }
     
-    if (!SD_MMS.rename("/temp_config.json", CONFIG_FILE)) {
+    if (!SD_MMC.rename("/temp_config.json", CONFIG_FILE)) {
         Serial.println("Failed to replace old config file");
         return false;
     }
