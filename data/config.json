@@ -1,0 +1,49 @@
+{
+  "wifi": {
+    "ssid": "",
+    "password": ""
+  },
+  "ntp": {
+    "server": "pool.ntp.org",
+    "timezone": "CET-1CEST,M3.5.0,M10.5.0/3"
+  },
+  "display": {
+    "brightness": 100,
+    "timeout": 30,
+    "auto_brightness": true,
+    "theme": "dark"
+  },
+  "alarms": [
+    {
+      "id": 1,
+      "enabled": true,
+      "hour": 7,
+      "minute": 0,
+      "days": [1, 2, 3, 4, 5],
+      "type": "radio",
+      "station_id": 0,
+      "volume": 70,
+      "fade_in": 30,
+      "duration": 60
+    }
+  ],
+  "radio_stations": [
+    {
+      "id": 0,
+      "name": "Example Radio",
+      "url": "http://example.com/stream.mp3",
+      "genre": "Various"
+    }
+  ],
+  "weather": {
+    "api_key": "",
+    "city_id": "",
+    "units": "metric",
+    "update_interval": 30
+  },
+  "system": {
+    "hostname": "radiowecker",
+    "ota_password": "changeme"
+  },
+  "fallback_audio": "/alarm.mp3"
+}
