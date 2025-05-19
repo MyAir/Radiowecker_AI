@@ -1,23 +1,35 @@
-#include "UIManager.h"
-#include "lvgl_helper.h"
 #include <Arduino.h>
-#include <Arduino_GFX.h>
 #include <SPIFFS.h>
-#include <FS.h>
-#include <WiFi.h>
+#include <lvgl.h>
+#include "UIManager.h"
+#include "DisplayManager.h"
+#include "AudioManager.h"
 
-// Global instance
-UIManager& uiManager = UIManager::getInstance();
+// Include LVGL fonts
+LV_FONT_DECLARE(lv_font_montserrat_14);
+LV_FONT_DECLARE(lv_font_montserrat_16);
+LV_FONT_DECLARE(lv_font_montserrat_20);
+LV_FONT_DECLARE(lv_font_montserrat_24);
+LV_FONT_DECLARE(lv_font_montserrat_32);
+LV_FONT_DECLARE(lv_font_montserrat_48);
+
+// Static member is already initialized in the header file
+
+// We'll use the static member functions declared in UIManager.h
 
 bool UIManager::init() {
     // Initialize LVGL if not already done
     if (!lv_is_initialized()) {
         lv_init();
-    }
-    
-    // Initialize display and touch
-    if (!lvgl_helper_init()) {
-        return false;
+        
+        // Initialize display and touch through DisplayManager
+        if (!DisplayManager::getInstance().begin()) {
+            Serial.println("Failed to initialize display manager");
+            return false;
+        }
+        
+        // Set initial brightness
+        DisplayManager::getInstance().setBrightness(80);
     }
     
     // Initialize theme
@@ -63,37 +75,7 @@ void UIManager::showMessage(const char* title, const char* message) {
     lv_obj_center(mbox);
 }
 
-void UIManager::showAlarmScreen() {
-    if (!alarmScreen) {
-        alarmScreen = lv_obj_create(NULL);
-        lv_obj_set_size(alarmScreen, LV_PCT(100), LV_PCT(100));
-        lv_obj_set_style_bg_color(alarmScreen, lv_color_hex(0xFF0000), 0);
-        lv_obj_set_style_bg_opa(alarmScreen, LV_OPA_70, 0);
-        
-        lv_obj_t* label = lv_label_create(alarmScreen);
-        lv_label_set_text(label, "ALARM!");
-        lv_obj_set_style_text_font(label, &lv_font_montserrat_48, 0);
-        lv_obj_center(label);
-        
-        lv_obj_t* btn = lv_btn_create(alarmScreen);
-        lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -20);
-        lv_obj_add_event_cb(btn, [](lv_event_t* e) {
-            uiManager.hideAlarmScreen();
-        }, LV_EVENT_CLICKED, NULL);
-        
-        label = lv_label_create(btn);
-        lv_label_set_text(label, "Dismiss");
-        lv_obj_center(label);
-    }
-    
-    lv_scr_load_anim(alarmScreen, LV_SCR_LOAD_ANIM_FADE_IN, 300, 0, false);
-}
 
-void UIManager::hideAlarmScreen() {
-    if (alarmScreen) {
-        lv_scr_load_anim(homeScreen, LV_SCR_LOAD_ANIM_FADE_OUT, 300, 0, false);
-    }
-}
 
 void UIManager::updateVolume(uint8_t volume) {
     // Update volume slider if it exists
@@ -104,6 +86,9 @@ void UIManager::updateVolume(uint8_t volume) {
 }
 
 void UIManager::updateBrightness(uint8_t brightness) {
+    // Update brightness using DisplayManager singleton
+    DisplayManager::getInstance().setBrightness(brightness);
+    
     // Update brightness slider if it exists
     lv_obj_t* slider = lv_obj_get_child(settingsScreen, 1);
     if (slider && lv_obj_check_type(slider, &lv_slider_class)) {
@@ -155,40 +140,36 @@ void UIManager::updateNextAlarm(uint8_t hour, uint8_t minute, bool enabled) {
     }
 }
 
-// Static callback implementations
-void UIManager::alarm_toggle_cb(lv_event_t* e) {
-    lv_obj_t* obj = lv_event_get_target(e);
-    bool checked = lv_obj_has_state(obj, LV_STATE_CHECKED);
+void UIManager::radio_volume_changed_cb(lv_event_t* e) {
+    // Get the UIManager instance from user_data
+    UIManager* ui = static_cast<UIManager*>(lv_event_get_user_data(e));
+    if (!ui) return;
     
-    // Get the alarm time from the parent container
-    lv_obj_t* cont = lv_obj_get_parent(obj);
-    lv_obj_t* hour_roller = lv_obj_get_child(cont, 1);
-    lv_obj_t* min_roller = lv_obj_get_child(cont, 3);
-    
-    uint8_t hour = lv_roller_get_selected(hour_roller);
-    uint8_t minute = lv_roller_get_selected(min_roller);
-    
-    if (uiManager.getAlarmCallback()) {
-        // Default to weekdays only
-        bool days[7] = {true, true, true, true, true, false, false};
-        uiManager.getAlarmCallback()(checked, hour, minute, days);
-    }
-}
-
-void UIManager::volume_changed_cb(lv_event_t* e) {
+    // Access to the slider that triggered the event
     lv_obj_t* slider = lv_event_get_target(e);
-    int volume = lv_slider_get_value(slider);
-    if (uiManager.getVolumeCallback()) {
-        uiManager.getVolumeCallback()(volume);
+    uint8_t volume = lv_slider_get_value(slider);
+    
+    // Call the volume callback if set
+    if (ui->volumeCallback) {
+        ui->volumeCallback(volume);
     }
 }
 
 void UIManager::brightness_changed_cb(lv_event_t* e) {
+    // Get UIManager instance from user data
+    UIManager* ui = static_cast<UIManager*>(lv_event_get_user_data(e));
+    if (!ui) return;
+    
     lv_obj_t* slider = lv_event_get_target(e);
-    int brightness = lv_slider_get_value(slider);
-    if (uiManager.getBrightnessCallback()) {
-        uiManager.getBrightnessCallback()(brightness);
+    uint8_t brightness = lv_slider_get_value(slider);
+    
+    // Call the brightness callback if set
+    if (ui->brightnessCallback) {
+        ui->brightnessCallback(brightness);
     }
+    
+    // Also directly update brightness in DisplayManager
+    DisplayManager::getInstance().setBrightness(brightness);
 }
 
 void UIManager::createRadioScreen() {
@@ -198,101 +179,131 @@ void UIManager::createRadioScreen() {
     
     // Volume slider
     lv_obj_t* volumeSlider = lv_slider_create(radioScreen);
-    lv_obj_align(volumeSlider, LV_ALIGN_BOTTOM_MID, 0, -30);
+    lv_obj_set_size(volumeSlider, 200, 20);
+    lv_obj_align(volumeSlider, LV_ALIGN_BOTTOM_MID, 0, -20);
     lv_slider_set_range(volumeSlider, 0, 100);
     lv_slider_set_value(volumeSlider, 70, LV_ANIM_OFF);
-    lv_obj_add_event_cb(volumeSlider, [](lv_event_t* e) {
-        lv_obj_t* slider = lv_event_get_target(e);
-        int32_t volume = lv_slider_get_value(slider);
-        if (uiManager.volumeCallback) {
-            uiManager.volumeCallback(volume);
-        }
-    }, LV_EVENT_VALUE_CHANGED, NULL);
-    
-    // Volume icon
-    lv_obj_t* volIcon = lv_label_create(radioScreen);
-    lv_label_set_text(volIcon, LV_SYMBOL_VOLUME_MID);
-    lv_obj_align_to(volIcon, volumeSlider, LV_ALIGN_OUT_LEFT_MID, -10, 0);
+    // Use a static member function as callback instead of a capturing lambda
+    lv_obj_add_event_cb(volumeSlider, radio_volume_changed_cb, LV_EVENT_VALUE_CHANGED, this);
 }
 
+// Static callback implementation
+void UIManager::volume_changed_cb(lv_event_t* e) {
+    // Get the UIManager instance from user_data
+    UIManager* ui = static_cast<UIManager*>(lv_event_get_user_data(e));
+    if (!ui) return;
+    
+    // Get slider value
+    lv_obj_t* slider = lv_event_get_target(e);
+    int32_t volume = lv_slider_get_value(slider);
+    
+    // Call volume callback if registered
+    if (ui->volumeCallback) {
+        ui->volumeCallback(volume);
+    }
+}
+
+// Note: Removing erroneous continuation block
+
 void UIManager::createSettingsScreen() {
+    if (settingsScreen) {
+        lv_obj_del(settingsScreen);
+    }
+    
     settingsScreen = lv_obj_create(NULL);
     lv_obj_clear_flag(settingsScreen, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_color(settingsScreen, lv_color_black(), LV_PART_MAIN);
     
     // Back button
-    lv_obj_t* btnBack = lv_btn_create(settingsScreen);
-    lv_obj_add_style(btnBack, &buttonStyle, 0);
-    lv_obj_add_style(btnBack, &buttonPressedStyle, LV_STATE_PRESSED);
-    lv_obj_set_size(btnBack, 80, 40);
-    lv_obj_align(btnBack, LV_ALIGN_TOP_LEFT, 10, 10);
+    lv_obj_t* backBtn = lv_btn_create(settingsScreen);
+    lv_obj_set_size(backBtn, 80, 40);
+    lv_obj_align(backBtn, LV_ALIGN_TOP_LEFT, 10, 10);
+    lv_obj_t* backLabel = lv_label_create(backBtn);
+    lv_label_set_text(backLabel, LV_SYMBOL_LEFT " Back");
+    lv_obj_center(backLabel);
+    // Use static member function as callback
+    lv_obj_add_event_cb(backBtn, back_btn_clicked_cb, LV_EVENT_CLICKED, this);
+}
+
+// Static callback implementation
+void UIManager::back_btn_clicked_cb(lv_event_t* e) {
+    // Get the UIManager instance from user_data
+    UIManager* ui = static_cast<UIManager*>(lv_event_get_user_data(e));
+    if (!ui) return;
     
-    lv_obj_t* label = lv_label_create(btnBack);
-    lv_label_set_text(label, LV_SYMBOL_LEFT);
-    lv_obj_center(label);
-    lv_obj_add_event_cb(btnBack, [](lv_event_t* e) {
-        uiManager.showHomeScreen();
-    }, LV_EVENT_CLICKED, NULL);
+    // Call the showHomeScreen method on the UI instance
+    ui->showHomeScreen();
     
     // Title
-    lv_obj_t* title = lv_label_create(settingsScreen);
-    lv_obj_add_style(title, &infoStyle, 0);
-    lv_label_set_text(title, "Settings");
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 20);
+    lv_obj_t* titleLabel = lv_label_create(ui->settingsScreen);
+    lv_label_set_text(titleLabel, "Settings");
+    lv_obj_set_style_text_font(titleLabel, &lv_font_montserrat_24, 0);
+    lv_obj_align(titleLabel, LV_ALIGN_TOP_MID, 0, 20);
     
     // Brightness control
-    lv_obj_t* brightnessLabel = lv_label_create(settingsScreen);
-    lv_label_set_text(brightnessLabel, "Display Brightness");
-    lv_obj_align(brightnessLabel, LV_ALIGN_TOP_LEFT, 20, 70);
+    lv_obj_t* brightnessLabel = lv_label_create(ui->settingsScreen);
+    lv_label_set_text(brightnessLabel, "Brightness");
+    lv_obj_set_style_text_font(brightnessLabel, &lv_font_montserrat_16, 0);
+    lv_obj_align(brightnessLabel, LV_ALIGN_TOP_LEFT, 20, 80);
     
-    lv_obj_t* brightnessSlider = lv_slider_create(settingsScreen);
-    lv_obj_set_size(brightnessSlider, 300, 20);
-    lv_obj_align_to(brightnessSlider, brightnessLabel, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);
-    lv_slider_set_range(brightnessSlider, 10, 100);
-    lv_slider_set_value(brightnessSlider, 70, LV_ANIM_OFF);
-    lv_obj_add_event_cb(brightnessSlider, brightness_changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_t* brightnessSlider = lv_slider_create(ui->settingsScreen);
+    lv_obj_set_size(brightnessSlider, 200, 20);
+    lv_obj_align(brightnessSlider, LV_ALIGN_TOP_LEFT, 20, 110);
+    lv_slider_set_range(brightnessSlider, 10, 255);
+    // Set default brightness to 80%
+    lv_slider_set_value(brightnessSlider, 200, LV_ANIM_OFF);
+    lv_obj_add_event_cb(brightnessSlider, brightness_changed_cb, LV_EVENT_VALUE_CHANGED, ui);
     
-    // Auto-brightness switch
-    lv_obj_t* autoBrightLabel = lv_label_create(settingsScreen);
-    lv_label_set_text(autoBrightLabel, "Auto Brightness");
-    lv_obj_align_to(autoBrightLabel, brightnessSlider, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 20);
+    // Volume control
+    lv_obj_t* volumeLabel = lv_label_create(ui->settingsScreen);
+    lv_label_set_text(volumeLabel, "Volume");
+    lv_obj_set_style_text_font(volumeLabel, &lv_font_montserrat_16, 0);
+    lv_obj_align(volumeLabel, LV_ALIGN_TOP_LEFT, 20, 160);
     
-    lv_obj_t* autoBrightSwitch = lv_switch_create(settingsScreen);
-    lv_obj_align_to(autoBrightSwitch, autoBrightLabel, LV_ALIGN_OUT_RIGHT_MID, 20, 0);
-    lv_obj_add_state(autoBrightSwitch, LV_STATE_CHECKED);
+    lv_obj_t* volumeSlider = lv_slider_create(ui->settingsScreen);
+    lv_obj_set_size(volumeSlider, 200, 20);
+    lv_obj_align(volumeSlider, LV_ALIGN_TOP_LEFT, 20, 190);
+    lv_slider_set_range(volumeSlider, 0, 100);
+    lv_slider_set_value(volumeSlider, 50, LV_ANIM_OFF);
+    lv_obj_add_event_cb(volumeSlider, volume_changed_cb, LV_EVENT_VALUE_CHANGED, ui);
     
-    // Timezone settings
-    lv_obj_t* timezoneLabel = lv_label_create(settingsScreen);
-    lv_label_set_text(timezoneLabel, "Timezone");
-    lv_obj_align_to(timezoneLabel, autoBrightLabel, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 30);
+    // Theme toggle
+    lv_obj_t* themeLabel = lv_label_create(ui->settingsScreen);
+    lv_label_set_text(themeLabel, "Dark Theme");
+    lv_obj_set_style_text_font(themeLabel, &lv_font_montserrat_16, 0);
+    lv_obj_align(themeLabel, LV_ALIGN_TOP_LEFT, 20, 240);
     
-    lv_obj_t* timezoneDropdown = lv_dropdown_create(settingsScreen);
-    lv_dropdown_set_options(timezoneDropdown, "UTC\nUTC+1 (CET)\nUTC+2 (CEST)\nUTC-5 (EST)\nUTC-8 (PST)");
-    lv_obj_align_to(timezoneDropdown, timezoneLabel, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 5);
-    lv_obj_set_width(timezoneDropdown, 250);
+    lv_obj_t* themeSwitch = lv_switch_create(ui->settingsScreen);
+    lv_obj_set_size(themeSwitch, 60, 30);
+    lv_obj_align(themeSwitch, LV_ALIGN_TOP_RIGHT, -20, 240);
+    if (ui->darkTheme) {
+        lv_obj_add_state(themeSwitch, LV_STATE_CHECKED);
+    }
+    lv_obj_add_event_cb(themeSwitch, theme_switch_cb, LV_EVENT_VALUE_CHANGED, ui);
+}
+
+// Static callback implementation for theme switch
+void UIManager::theme_switch_cb(lv_event_t* e) {
+    UIManager* ui = static_cast<UIManager*>(lv_event_get_user_data(e));
+    if (!ui) return;
     
-    // WiFi settings button
-    lv_obj_t* btnWifi = lv_btn_create(settingsScreen);
-    lv_obj_add_style(btnWifi, &buttonStyle, 0);
-    lv_obj_add_style(btnWifi, &buttonPressedStyle, LV_STATE_PRESSED);
-    lv_obj_set_size(btnWifi, 200, 40);
-    lv_obj_align(btnWifi, LV_ALIGN_TOP_MID, 0, 250);
+    lv_obj_t* sw = lv_event_get_target(e);
+    bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
     
-    label = lv_label_create(btnWifi);
-    lv_label_set_text(label, "WiFi Settings");
-    lv_obj_center(label);
+    // Toggle dark theme
+    ui->darkTheme = checked;
     
-    // System info
-    lv_obj_t* sysInfo = lv_label_create(settingsScreen);
-    lv_label_set_text_fmt(sysInfo, "Firmware v1.0.0\nIP: %s\nMAC: %s",
-        WiFi.localIP().toString().c_str(),
-        WiFi.macAddress().c_str());
-    lv_obj_align(sysInfo, LV_ALIGN_BOTTOM_LEFT, 20, -20);
+    // Apply theme change
+    ui->initTheme();
 }
 
 void UIManager::showScreen(lv_obj_t* screen) {
+    if (currentAlarmScreen) {
+        lv_obj_del(currentAlarmScreen);
+        currentAlarmScreen = nullptr;
+    }
     if (screen) {
-        currentScreen = screen;
+        currentAlarmScreen = screen;
         lv_scr_load_anim(screen, LV_SCR_LOAD_ANIM_FADE_IN, 300, 0, false);
     }
 }
@@ -308,7 +319,8 @@ void UIManager::showAlarmSettingsScreen() {
     if (!alarmSettingsScreen) {
         createAlarmSettingsScreen();
     }
-    showScreen(alarmSettingsScreen);
+    lv_scr_load_anim(alarmSettingsScreen, LV_SCR_LOAD_ANIM_MOVE_LEFT, 300, 0, false);
+    currentScreen = alarmSettingsScreen;
 }
 
 void UIManager::showRadioScreen() {
@@ -325,156 +337,43 @@ void UIManager::showSettingsScreen() {
     showScreen(settingsScreen);
 }
 
-void UIManager::updateTime(const String& timeStr) {
-    if (timeLabel) {
-        lv_label_set_text(timeLabel, timeStr.c_str());
-    }
-}
-
-void UIManager::updateDate(const String& dateStr) {
-    if (dateLabel) {
-        lv_label_set_text(dateLabel, dateStr.c_str());
-    }
-}
-
-void UIManager::updateTemperature(const String& tempStr) {
-    if (tempLabel) {
-        lv_label_set_text_fmt(tempLabel, "Temp: %s°C", tempStr.c_str());
-    }
-}
-
-void UIManager::updateHumidity(const String& humStr) {
-    if (humidityLabel) {
-        lv_label_set_text_fmt(humidityLabel, "Humidity: %s%%", humStr.c_str());
-    }
-}
-
-void UIManager::updateTVOC(const String& tvocStr) {
-    if (tvocLabel) {
-        lv_label_set_text_fmt(tvocLabel, "TVOC: %s ppb", tvocStr.c_str());
-    }
-}
-
-void UIManager::updateCO2(const String& co2Str) {
-    if (eco2Label) {
-        lv_label_set_text_fmt(eco2Label, "eCO2: %s ppm", co2Str.c_str());
-    }
-}
-
-void UIManager::updateNextAlarm(const String& alarmStr) {
-    if (nextAlarmLabel) {
-        lv_label_set_text(nextAlarmLabel, alarmStr.c_str());
-    }
-}
-
-void UIManager::updateWeather(const String& condition, float temp, float feels_like, int humidity) {
-    // Update weather icon based on condition
-    const char* emoji = "❓";
-    String cond = condition;
-    cond.toLowerCase();
-    
-    if (cond.indexOf("clear") >= 0) emoji = "☀️";
-    else if (cond.indexOf("cloud") >= 0) emoji = "☁️";
-    else if (cond.indexOf("rain") >= 0) emoji = "🌧️";
-    else if (cond.indexOf("snow") >= 0) emoji = "❄️";
-    else if (cond.indexOf("thunder") >= 0) emoji = "⛈️";
-    
-    lv_label_set_text(weatherIcon, emoji);
-    lv_label_set_text_fmt(tempLabel, "%.1f°C", temp);
-    lv_label_set_text_fmt(feelsLikeLabel, "Feels like %.1f°C", feels_like);
-}
-
-void UIManager::updateAirQuality(float tvoc, float eco2, float temp, float humidity) {
-    lv_label_set_text_fmt(tvocLabel, "TVOC: %.0f ppb", tvoc);
-    lv_label_set_text_fmt(eco2Label, "eCO2: %.0f ppm", eco2);
-    lv_label_set_text_fmt(humidityLabel, "Humidity: %.1f%%", humidity);
-    
-    // Update background color based on TVOC level (green to red)
-    uint8_t r = map(constrain(tvoc, 0, 1000), 0, 1000, 0, 255);
-    uint8_t g = map(constrain(tvoc, 0, 1000), 0, 1000, 255, 0);
-    lv_obj_set_style_bg_color(lv_obj_get_parent(tvocLabel), lv_color_make(r, g, 0), 0);
-}
-
 void UIManager::showAlarmScreen() {
     // Create a full-screen overlay for the alarm
     lv_obj_t* alarmScreen = lv_obj_create(lv_scr_act());
     lv_obj_set_size(alarmScreen, LV_PCT(100), LV_PCT(100));
     lv_obj_set_style_bg_color(alarmScreen, lv_color_hex(0x000000), 0);
     lv_obj_set_style_bg_opa(alarmScreen, LV_OPA_80, 0);
-    
+
     // Alarm time
     lv_obj_t* alarmTime = lv_label_create(alarmScreen);
     lv_obj_add_style(alarmTime, &timeStyle, 0);
     lv_label_set_text(alarmTime, "07:00");
     lv_obj_center(alarmTime);
-    
+
     // Snooze button
     lv_obj_t* btnSnooze = lv_btn_create(alarmScreen);
     lv_obj_add_style(btnSnooze, &buttonStyle, 0);
     lv_obj_add_style(btnSnooze, &buttonPressedStyle, LV_STATE_PRESSED);
     lv_obj_set_size(btnSnooze, 150, 60);
     lv_obj_align(btnSnooze, LV_ALIGN_BOTTOM_MID, -90, -40);
-    
+
     lv_obj_t* label = lv_label_create(btnSnooze);
     lv_label_set_text(label, "Snooze");
     lv_obj_center(label);
-    
+
     // Stop button
     lv_obj_t* btnStop = lv_btn_create(alarmScreen);
     lv_obj_add_style(btnStop, &buttonStyle, 0);
     lv_obj_add_style(btnStop, &buttonPressedStyle, LV_STATE_PRESSED);
     lv_obj_set_size(btnStop, 150, 60);
     lv_obj_align(btnStop, LV_ALIGN_BOTTOM_MID, 90, -40);
-    
+
     label = lv_label_create(btnStop);
     lv_label_set_text(label, "Stop");
     lv_obj_center(label);
-    
+
     // Store the alarm screen reference
     currentAlarmScreen = alarmScreen;
-}
-
-void UIManager::hideAlarmScreen() {
-    if (currentAlarmScreen) {
-        lv_obj_del(currentAlarmScreen);
-        currentAlarmScreen = nullptr;
-    }
-}
-
-void UIManager::showMessage(const String& title, const String& message) {
-    // Create a message box
-    lv_obj_t* mbox = lv_msgbox_create(NULL, title.c_str(), message.c_str(), NULL, true);
-    lv_obj_center(mbox);
-    
-    // Auto-close after 3 seconds
-    lv_timer_create([](lv_timer_t* timer) {
-        lv_obj_t* mbox = (lv_obj_t*)timer->user_data;
-        lv_msgbox_close(mbox);
-        lv_timer_del(timer);
-    }, 3000, mbox);
-}
-
-void UIManager::updateVolume(uint8_t volume) {
-    // Update volume slider if it exists
-    lv_obj_t* slider = lv_obj_get_child(radioScreen, 0);
-    if (slider && lv_obj_check_type(slider, &lv_slider_class)) {
-        lv_slider_set_value(slider, volume, LV_ANIM_OFF);
-    }
-}
-
-void UIManager::updateBrightness(uint8_t brightness) {
-    // Update display brightness (0-100% to 0-255)
-    displayManager.setBrightness(map(brightness, 0, 100, 0, 255));
-}
-
-// Brightness changed callback
-void UIManager::brightness_changed_cb(lv_event_t *e) {
-    UIManager& ui = UIManager::getInstance();
-    lv_obj_t *slider = lv_event_get_target(e);
-    int32_t brightness = lv_slider_get_value(slider);
-    if (ui.brightnessCallback) {
-        ui.brightnessCallback(brightness);
-    }
 }
 
 void UIManager::initTheme() {
@@ -482,42 +381,35 @@ void UIManager::initTheme() {
     lv_style_init(&timeStyle);
     lv_style_set_text_font(&timeStyle, &lv_font_montserrat_48);
     lv_style_set_text_color(&timeStyle, lv_color_white());
-    lv_style_set_text_align(&timeStyle, LV_TEXT_ALIGN_CENTER);
     
     lv_style_init(&dateStyle);
     lv_style_set_text_font(&dateStyle, &lv_font_montserrat_24);
-    lv_style_set_text_color(&dateStyle, lv_color_hex(0xCCCCCC));
-    lv_style_set_text_align(&dateStyle, LV_TEXT_ALIGN_CENTER);
+    lv_style_set_text_color(&dateStyle, lv_color_white());
     
     lv_style_init(&infoStyle);
-    lv_style_set_text_font(&infoStyle, &lv_font_montserrat_20);
+    lv_style_set_text_font(&infoStyle, &lv_font_montserrat_16);
     lv_style_set_text_color(&infoStyle, lv_color_white());
-    lv_style_set_text_align(&infoStyle, LV_TEXT_ALIGN_CENTER);
     
     lv_style_init(&buttonStyle);
     lv_style_set_radius(&buttonStyle, 10);
-    lv_style_set_bg_opa(&buttonStyle, LV_OPA_30);
-    lv_style_set_bg_color(&buttonStyle, lv_color_white());
-    lv_style_set_border_width(&buttonStyle, 0);
+    lv_style_set_bg_color(&buttonStyle, lv_color_hex(0x4CAF50));
+    lv_style_set_bg_opa(&buttonStyle, LV_OPA_COVER);
     lv_style_set_pad_all(&buttonStyle, 10);
     
     lv_style_init(&buttonPressedStyle);
-    lv_style_set_bg_opa(&buttonPressedStyle, LV_OPA_50);
-    lv_style_set_bg_color(&buttonPressedStyle, lv_color_white());
+    lv_style_set_bg_color(&buttonPressedStyle, lv_color_hex(0x388E3C));
     
     // Set the default screen color
     static lv_style_t screen_style;
     lv_style_init(&screen_style);
-    lv_style_set_bg_color(&screen_style, lv_color_black());
-    lv_style_set_bg_opa(&screen_style, LV_OPA_COVER);
     lv_style_set_pad_all(&screen_style, 0);
-    lv_style_set_margin_all(&screen_style, 0);
+    lv_style_set_bg_color(&screen_style, lv_color_black());
+    lv_style_set_text_color(&screen_style, lv_color_white());
     lv_style_set_border_width(&screen_style, 0);
     
     lv_obj_add_style(lv_scr_act(), &screen_style, 0);
     
-    // Enable anti-aliasing for better text rendering
-    lv_disp_set_antialiasing(lv_disp_get_default(), true);
+    // Note: Anti-aliasing is enabled by default in LVGL
     
     // Set default theme
     lv_theme_t* theme = lv_theme_default_init(
@@ -597,6 +489,19 @@ void UIManager::createHomeScreen() {
     }
 }
 
+void UIManager::hideAlarmScreen() {
+    if (currentAlarmScreen) {
+        lv_obj_del(currentAlarmScreen);
+        currentAlarmScreen = nullptr;
+    }
+    // Also stop any playing alarm sound
+    if (AudioManager::getInstance().isPlaying()) {
+        AudioManager::getInstance().stop();
+    }
+    // Return to home screen
+    showHomeScreen();
+}
+
 void UIManager::createAlarmSettingsScreen() {
     if (alarmSettingsScreen) {
         lv_obj_del(alarmSettingsScreen);
@@ -616,9 +521,7 @@ void UIManager::createAlarmSettingsScreen() {
     lv_obj_t* label = lv_label_create(btnBack);
     lv_label_set_text(label, LV_SYMBOL_LEFT);
     lv_obj_center(label);
-    lv_obj_add_event_cb(btnBack, [](lv_event_t* e) {
-        uiManager.showHomeScreen();
-    }, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(btnBack, back_btn_clicked_cb, LV_EVENT_CLICKED, this);
     
     // Title
     lv_obj_t* title = lv_label_create(alarmSettingsScreen);
@@ -681,56 +584,109 @@ void UIManager::createAlarmSettingsScreen() {
         // Store day index in user data
         lv_obj_set_user_data(btn, (void*)(intptr_t)i);
         
-        lv_obj_add_event_cb(btn, [](lv_event_t* e) {
-            lv_obj_t* btn = lv_event_get_target(e);
-            int day = (int)(intptr_t)lv_obj_get_user_data(btn);
-            days_selected[day] = !days_selected[day];
-            
-            if (days_selected[day]) {
-                lv_obj_add_state(btn, LV_STATE_CHECKED);
-            } else {
-                lv_obj_clear_state(btn, LV_STATE_CHECKED);
-            }
-        }, LV_EVENT_CLICKED, NULL);
+        // Store UIManager instance and day index in user_data struct
+        UserData* data = new UserData();
+        data->ui = this;
+        data->value = i;  // Store day index in value field
+        
+        lv_obj_add_event_cb(btn, day_btn_clicked_cb, LV_EVENT_CLICKED, data);
     }
     
-    // Alarm toggle
+    // Alarm toggle container
     lv_obj_t* toggleContainer = lv_obj_create(alarmSettingsScreen);
     lv_obj_remove_style_all(toggleContainer);
     lv_obj_set_size(toggleContainer, lv_pct(80), 60);
     lv_obj_align(toggleContainer, LV_ALIGN_TOP_MID, 0, 280);
-    
+
     lv_obj_t* toggleLabel = lv_label_create(toggleContainer);
     lv_label_set_text(toggleLabel, "Alarm Enabled");
     lv_obj_align(toggleLabel, LV_ALIGN_LEFT_MID, 0, 0);
-    
+
     lv_obj_t* alarmToggle = lv_switch_create(toggleContainer);
     lv_obj_align(alarmToggle, LV_ALIGN_RIGHT_MID, 0, 0);
-    lv_obj_add_event_cb(alarmToggle, alarm_toggle_cb, LV_EVENT_VALUE_CHANGED, NULL);
-    
+    lv_obj_add_event_cb(alarmToggle, alarm_toggle_cb, LV_EVENT_VALUE_CHANGED, this);
+
     // Save button
     lv_obj_t* btnSave = lv_btn_create(alarmSettingsScreen);
     lv_obj_add_style(btnSave, &buttonStyle, 0);
     lv_obj_add_style(btnSave, &buttonPressedStyle, LV_STATE_PRESSED);
     lv_obj_set_size(btnSave, lv_pct(60), 50);
     lv_obj_align(btnSave, LV_ALIGN_BOTTOM_MID, 0, -20);
-    
+
     lv_obj_t* saveLabel = lv_label_create(btnSave);
     lv_label_set_text(saveLabel, "Save Alarm");
     lv_obj_center(saveLabel);
+
+    lv_obj_add_event_cb(btnSave, save_alarm_cb, LV_EVENT_CLICKED, this);
+}
+
+// Static callback implementation for day buttons
+void UIManager::day_btn_clicked_cb(lv_event_t* e) {
+    // Get the user data containing UIManager instance and day index
+    UserData* data = static_cast<UserData*>(lv_event_get_user_data(e));
+    if (!data) return;
     
-    lv_obj_add_event_cb(btnSave, [](lv_event_t* e) {
-        // Get the selected time
-        lv_obj_t* hour_roller = lv_obj_get_child(lv_obj_get_child(alarmSettingsScreen, 2), 0);
-        lv_obj_t* min_roller = lv_obj_get_child(lv_obj_get_child(alarmSettingsScreen, 2), 2);
-        
-        uint8_t hour = lv_roller_get_selected(hour_roller);
-        uint8_t minute = lv_roller_get_selected(min_roller) * 5; // Convert from index to minutes (0,5,10...)
-        
-        if (uiManager.getAlarmCallback()) {
-            uiManager.getAlarmCallback()(true, hour, minute, days_selected);
+    // Get button and day index
+    lv_obj_t* btn = lv_event_get_target(e);
+    int day = data->value; // day index is stored in value field
+    
+    // Update selection state (using a static array to track button states)
+    static bool days_selected[7] = {false};
+    days_selected[day] = !days_selected[day];
+    
+    // Toggle button appearance
+    if (days_selected[day]) {
+        lv_obj_add_state(btn, LV_STATE_CHECKED);
+    } else {
+        lv_obj_clear_state(btn, LV_STATE_CHECKED);
+    }
+}
+
+// Static callback for alarm toggle
+void UIManager::alarm_toggle_cb(lv_event_t* e) {
+    UIManager* ui = static_cast<UIManager*>(lv_event_get_user_data(e));
+    if (!ui) return;
+    
+    lv_obj_t* sw = lv_event_get_target(e);
+    bool enabled = lv_obj_has_state(sw, LV_STATE_CHECKED);
+    
+    // This would require additional implementation to actually do something
+    // with the alarm toggle state
+}
+
+// Static callback implementation
+void UIManager::save_alarm_cb(lv_event_t* e) {
+    UIManager* ui = static_cast<UIManager*>(lv_event_get_user_data(e));
+    if (!ui) return;
+    
+    // Get the selected time
+    lv_obj_t* timeContainer = lv_obj_get_child(ui->alarmSettingsScreen, 2);
+    if (!timeContainer) return;
+    
+    lv_obj_t* hour_roller = lv_obj_get_child(timeContainer, 0);
+    lv_obj_t* min_roller = lv_obj_get_child(timeContainer, 2);
+    if (!hour_roller || !min_roller) return;
+    
+    uint8_t hour = lv_roller_get_selected(hour_roller);
+    uint8_t minute = lv_roller_get_selected(min_roller) * 5; // Convert from index to minutes (0,5,10...)
+    
+    bool days[7] = {false};
+    // Get the selected days from the buttons
+    lv_obj_t* daysContainer = lv_obj_get_child(ui->alarmSettingsScreen, 3);
+    if (daysContainer) {
+        for (int i = 0; i < 7; i++) {
+            lv_obj_t* btn = lv_obj_get_child(daysContainer, i);
+            if (btn) {
+                days[i] = lv_obj_has_state(btn, LV_STATE_CHECKED);
+            }
         }
-        
-        uiManager.showHomeScreen();
-    }, LV_EVENT_CLICKED, NULL);
+    }
+    
+    // Trigger the alarm callback
+    if (ui->alarmCallback) {
+        ui->alarmCallback(true, hour, minute, days);
+    }
+    
+    // Return to home screen
+    ui->showHomeScreen();
 }

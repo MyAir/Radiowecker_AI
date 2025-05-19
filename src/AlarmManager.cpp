@@ -4,8 +4,8 @@
 #include <ArduinoJson.h>
 #include <SD_MMC.h>
 
-// Global instance
-AlarmManager& alarmManager = AlarmManager::getInstance();
+// Initialize static member
+AlarmManager* AlarmManager::instance = nullptr;
 
 // Alarm methods
 bool Alarm::shouldTrigger(const struct tm& timeInfo) const {

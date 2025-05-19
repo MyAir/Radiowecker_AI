@@ -28,54 +28,69 @@
 // Touch screen configuration (GT911)
 #define TOUCH_GT911_SCL 18
 #define TOUCH_GT911_SDA 17
-#define TOUCH_GT911_INT 16
-#define TOUCH_GT911_RST -1
+#define TOUCH_GT911_INT -1  // Not used with TAMC_GT911
+#define TOUCH_GT911_RST 38  // Reset pin for GT911
 #define TOUCH_GT911_ADDR 0x14  // Default I2C address for GT911
 
-// Touch mapping
-#define TOUCH_MAP_X1 0
-#define TOUCH_MAP_X2 800
-#define TOUCH_MAP_Y1 0
-#define TOUCH_MAP_Y2 480
+// Touch mapping for TAMC_GT911 touch controller
+// These values map the raw touch coordinates to the display coordinates
+// You may need to adjust these based on your specific display and touch panel
+#define TOUCH_MAP_X1 0      // Minimum X value from touch controller
+#define TOUCH_MAP_X2 800    // Maximum X value from touch controller
+#define TOUCH_MAP_Y1 0      // Minimum Y value from touch controller
+#define TOUCH_MAP_Y2 480    // Maximum Y value from touch controller
 
 // Touch rotation (0-3)
 #define TOUCH_ROTATION 0
 
-// LVGL configuration
+// LVGL configuration - Only define if not already defined by LVGL
+#ifndef LV_HOR_RES_MAX
 #define LV_HOR_RES_MAX SCREEN_WIDTH
+#endif
+
+#ifndef LV_VER_RES_MAX
 #define LV_VER_RES_MAX SCREEN_HEIGHT
+#endif
 
 // Double buffer size (adjust based on available PSRAM)
+#ifndef LV_COLOR_DEPTH
 #define LV_COLOR_DEPTH 16
+#endif
+
+#ifndef LV_COLOR_16_SWAP
 #define LV_COLOR_16_SWAP 1
-#define LV_USE_GPU 1
-#define LV_USE_GPU_STM32_DMA2D 0
-#define LV_USE_GPU_RA6M3_G2D 0
-#define LV_USE_GPU_NXP_PXP 0
-#define LV_USE_GPU_SWM341_DMA2D 0
-#define LV_USE_GPU_ARM2D 0
+#endif
 
 // Enable if you have PSRAM
+#ifndef LV_USE_DRAW_SW
 #define LV_USE_DRAW_SW 1
-#define LV_USE_DRAW_SW_ASM 0
-#define LV_USE_DRAW_SW_NEON 0
-#define LV_USE_DRAW_SW_SSE 0
-#define LV_USE_DRAW_SW_ROUNDER 1
+#endif
 
-// Memory configuration
+// Memory configuration - Only define if not already defined by LVGL
+#ifndef LV_MEM_SIZE
 #define LV_MEM_SIZE (64 * 1024)  // 64KB for LVGL
-#define LV_MEM_CUSTOM 1
-#define LV_USE_OS_NONE 1
-#define LV_USE_PERF_MONITOR 0
-#define LV_USE_MEM_MONITOR 0
+#endif
 
-// Theme configuration
+#ifndef LV_MEM_CUSTOM
+#define LV_MEM_CUSTOM 1
+#endif
+
+// Theme configuration - Only define if not already defined by LVGL
+#ifndef LV_USE_THEME_DEFAULT
 #define LV_USE_THEME_DEFAULT 1
+#endif
+
+#ifndef LV_THEME_DEFAULT_DARK
 #define LV_THEME_DEFAULT_DARK 0
+#endif
+
+#ifndef LV_THEME_DEFAULT_TRANSITION_TIME
 #define LV_THEME_DEFAULT_TRANSITION_TIME 0
+#endif
+
+#ifndef LV_USE_THEME_MONO
 #define LV_USE_THEME_MONO 0
-#define LV_USE_THEME_ALIEN 0
-#define LV_USE_THEME_CUSTOM 0
+#endif
 
 // Font configuration - only define if not already defined by LVGL
 #ifndef LV_FONT_MONTSERRAT_8

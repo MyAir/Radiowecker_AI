@@ -2,6 +2,10 @@
 
 #include <Arduino_GFX_Library.h>
 #include <lvgl.h>
+#include <TAMC_GT911.h>
+
+// Forward declaration
+class TAMC_GT911;
 
 // Display dimensions
 #define SCREEN_WIDTH 800
@@ -76,19 +80,44 @@ void lvgl_display_flush_cb(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_
     
     gfx->startWrite();
     gfx->setAddrWindow(area->x1, area->y1, w, h);
-    gfx->writePixels((uint16_t*)color_p, w * h);
+    
+    // Use writePixels for Arduino_GFX
+    gfx->writePixelsDMA((uint16_t*)color_p, w * h);
+    
     gfx->endWrite();
     
     lv_disp_flush_ready(disp);
 }
 
+// Global touch controller instance
+extern TAMC_GT911* touch_controller;
+
 // Touchpad read callback
 void lvgl_touchpad_read_cb(lv_indev_drv_t *indev_driver, lv_indev_data_t *data) {
-    // This needs to be implemented based on your touch controller
-    // For now, we'll just set it to not pressed
-    data->state = LV_INDEV_STATE_RELEASED;
-    data->point.x = 0;
-    data->point.y = 0;
+    if (touch_controller) {
+        // Read touch data
+        touch_controller->read();
+        
+        if (touch_controller->isTouched) {
+            // Get first touch point
+            int16_t x = touch_controller->points[0].x;
+            int16_t y = touch_controller->points[0].y;
+            
+            // Map touch coordinates if needed (invert X and Y if necessary)
+            data->point.x = map(x, TOUCH_MAP_X1, TOUCH_MAP_X2, 0, SCREEN_WIDTH - 1);
+            data->point.y = map(y, TOUCH_MAP_Y1, TOUCH_MAP_Y2, 0, SCREEN_HEIGHT - 1);
+            data->state = LV_INDEV_STATE_PRESSED;
+            
+            // Debug output
+            // Serial.printf("Touch: x=%d, y=%d\n", data->point.x, data->point.y);
+        } else {
+            data->state = LV_INDEV_STATE_RELEASED;
+        }
+    } else {
+        data->state = LV_INDEV_STATE_RELEASED;
+        data->point.x = 0;
+        data->point.y = 0;
+    }
 }
 
 // LVGL task handler - call this in your main loop

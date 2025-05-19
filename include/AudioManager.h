@@ -1,19 +1,38 @@
 #pragma once
 
 #include <Arduino.h>
-#include <AudioGenerator.h>
-#include <AudioOutputI2S.h>
-#include <AudioFileSourceICYStream.h>
-#include <AudioFileSourceSD.h>
-#include <AudioFileSourceBuffer.h>
-#include <AudioGeneratorMP3.h>
+#include "AudioGenerator.h"
+#include "AudioOutputI2S.h"
+#include "AudioFileSourceSD.h"
+#include "AudioFileSourceBuffer.h"
+#include "AudioGeneratorMP3.h"
+#include "AudioFileSourceHTTPStream.h"
 #include <SD_MMC.h>
 
+// Forward declarations
+class AudioGenerator;
+class AudioFileSource;
+class AudioOutputI2S;
+class AudioFileSourceBuffer;
+
 class AudioManager {
+private:
+    static AudioManager* instance;
+    
+    // Private constructor and destructor
+    AudioManager() = default;
+    ~AudioManager();
+    
+    // Prevent copying and assignment
+    AudioManager(const AudioManager&) = delete;
+    AudioManager& operator=(const AudioManager&) = delete;
+    
 public:
     static AudioManager& getInstance() {
-        static AudioManager instance;
-        return instance;
+        if (!instance) {
+            instance = new AudioManager();
+        }
+        return *instance;
     }
 
     void begin();
@@ -37,18 +56,13 @@ public:
     void setPreBufferPercent(uint8_t percent) { preBufferPercent = constrain(percent, 10, 90); }
 
 private:
-    AudioManager();
-    ~AudioManager();
-    
-    // Delete copy constructor and assignment operator
-    AudioManager(const AudioManager&) = delete;
-    AudioManager& operator=(const AudioManager&) = delete;
+
     
     // Audio components
-    AudioGenerator* audioGenerator = nullptr;
-    AudioFileSource* fileSource = nullptr;
-    AudioFileSourceBuffer* bufferedSource = nullptr;
-    AudioOutputI2S* audioOutput = nullptr;
+    AudioGenerator *audioGenerator = nullptr;
+    AudioFileSource *fileSource = nullptr;
+    AudioFileSourceBuffer *bufferedSource = nullptr;
+    AudioOutputI2S *audioOutput = nullptr;
     
     // Playback state
     uint8_t currentVolume = 50;
@@ -67,4 +81,5 @@ private:
     void notifyPlaybackState(bool isPlaying);
 };
 
-extern AudioManager& audioManager;
+// Initialize static member
+inline AudioManager* AudioManager::instance = nullptr;

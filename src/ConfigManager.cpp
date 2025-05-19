@@ -1,7 +1,5 @@
 #include "ConfigManager.h"
 
-ConfigManager configManager;
-
 bool ConfigManager::begin() {
     if (!SD_MMC.begin()) {
         Serial.println("Failed to mount SD card");

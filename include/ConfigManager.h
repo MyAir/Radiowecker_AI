@@ -58,7 +58,51 @@ struct SystemConfig {
 };
 
 class ConfigManager {
+private:
+    static ConfigManager* instance;
+    
+    // Private constructor
+    ConfigManager() = default;
+    
+    // Prevent copying and assignment
+    ConfigManager(const ConfigManager&) = delete;
+    ConfigManager& operator=(const ConfigManager&) = delete;
+    
+    WiFiConfig wifiConfig;
+    NTPConfig ntpConfig;
+    DisplayConfig displayConfig;
+    std::vector<AlarmConfig> alarms;
+    std::vector<RadioStation> radioStations;
+    WeatherConfig weatherConfig;
+    SystemConfig systemConfig;
+    String fallbackAudio;
+    
+    // Sensor states and configuration
+    bool sdCardPresent = false;
+    uint64_t sdCardSize = 0;
+    bool sht31Available = false;
+    bool sgp30Available = false;
+    int i2cSDAPin = 38; // Default values
+    int i2cSCLPin = 37;
+    uint8_t sht31Address = 0x44;
+    bool sht31HeaterEnabled = false;
+    bool sht31Enabled = true;
+    bool sgp30Enabled = true;
+    
+    bool parseConfig(JsonDocument& doc);
+    void setDefaultConfig();
+    
 public:
+    // Copy constructor and assignment operator already deleted above
+    
+    // Static method to get the singleton instance
+    static ConfigManager& getInstance() {
+        if (!instance) {
+            instance = new ConfigManager();
+        }
+        return *instance;
+    }
+    
     bool begin();
     bool loadConfig();
     bool saveConfig();
@@ -74,6 +118,21 @@ public:
     SystemConfig getSystemConfig() { return systemConfig; }
     String getFallbackAudio() { return fallbackAudio; }
     
+    // OTA settings
+    String getOTAUri() { return systemConfig.hostname; }
+    String getOTAPassword() { return systemConfig.ota_password; }
+    
+    // Sensor configuration getters
+    int getI2CSDAPin() { return i2cSDAPin; }
+    int getI2CSCLPin() { return i2cSCLPin; }
+    bool isSHT31Enabled() { return sht31Enabled; }
+    bool isSGP30Enabled() { return sgp30Enabled; }
+    uint8_t getSHT31I2CAddress() { return sht31Address; }
+    bool isSHT31HeaterEnabled() { return sht31HeaterEnabled; }
+    bool isSHT31Available() { return sht31Available; }
+    bool isSGP30Available() { return sgp30Available; }
+    bool isSDCardPresent() { return sdCardPresent; }
+    
     // Setters
     void setWiFiConfig(const WiFiConfig& config) { wifiConfig = config; }
     void setNTPConfig(const NTPConfig& config) { ntpConfig = config; }
@@ -84,18 +143,17 @@ public:
     void setSystemConfig(const SystemConfig& config) { systemConfig = config; }
     void setFallbackAudio(const String& path) { fallbackAudio = path; }
     
-private:
-    WiFiConfig wifiConfig;
-    NTPConfig ntpConfig;
-    DisplayConfig displayConfig;
-    std::vector<AlarmConfig> alarms;
-    std::vector<RadioStation> radioStations;
-    WeatherConfig weatherConfig;
-    SystemConfig systemConfig;
-    String fallbackAudio;
-    
-    bool parseConfig(JsonDocument& doc);
-    void setDefaultConfig();
+    // Sensor configuration setters
+    void setI2CPins(int sda, int scl) { i2cSDAPin = sda; i2cSCLPin = scl; }
+    void setSHT31Enabled(bool enabled) { sht31Enabled = enabled; }
+    void setSGP30Enabled(bool enabled) { sgp30Enabled = enabled; }
+    void setSHT31Address(uint8_t address) { sht31Address = address; }
+    void setSHT31HeaterEnabled(bool enabled) { sht31HeaterEnabled = enabled; }
+    void setSHT31Available(bool available) { sht31Available = available; }
+    void setSGP30Available(bool available) { sgp30Available = available; }
+    void setSDCardPresent(bool present) { sdCardPresent = present; }
+    void setSDCardSize(uint64_t size) { sdCardSize = size; }
 };
 
-extern ConfigManager configManager;
+// Initialize static member
+inline ConfigManager* ConfigManager::instance = nullptr;

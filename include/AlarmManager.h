@@ -23,6 +23,16 @@ struct Alarm {
 };
 
 class AlarmManager {
+private:
+    static AlarmManager* instance;
+    
+    // Private constructor
+    AlarmManager() = default;
+    
+    // Prevent copying and assignment
+    AlarmManager(const AlarmManager&) = delete;
+    AlarmManager& operator=(const AlarmManager&) = delete;
+    
 public:
     static constexpr uint8_t MAX_ALARMS = 10;
     
@@ -30,8 +40,10 @@ public:
     using AlarmTriggerCallback = std::function<void(const Alarm& alarm)>;
     
     static AlarmManager& getInstance() {
-        static AlarmManager instance;
-        return instance;
+        if (!instance) {
+            instance = new AlarmManager();
+        }
+        return *instance;
     }
     
     void begin();
@@ -59,13 +71,16 @@ public:
     bool isSnoozing() const { return snoozeEndTime != 0; }
     uint32_t getSnoozeRemaining() const;
     
+    // Alarm checking (called from task)
+    void checkAlarms();
+    
 private:
-    AlarmManager() = default;
-    ~AlarmManager() = default;
+    // AlarmManager() = default;
+    // ~AlarmManager() = default;
     
     // Delete copy constructor and assignment operator
-    AlarmManager(const AlarmManager&) = delete;
-    AlarmManager& operator=(const AlarmManager&) = delete;
+    // AlarmManager(const AlarmManager&) = delete;
+    // AlarmManager& operator=(const AlarmManager&) = delete;
     
     std::vector<Alarm> alarms;
     bool timeSet = false;
@@ -76,11 +91,11 @@ private:
     // Callbacks
     AlarmTriggerCallback triggerCallback = nullptr;
     
-    // Internal methods
-    void checkAlarms();
+    // Private helpers
     bool isAlarmActive(const Alarm& alarm) const;
     void loadAlarms();
     void saveAlarms();
 };
 
-extern AlarmManager& alarmManager;
+// Initialize static member
+// inline AlarmManager* AlarmManager::instance = nullptr;

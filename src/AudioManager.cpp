@@ -1,13 +1,21 @@
 #include "AudioManager.h"
 #include "ConfigManager.h"
 #include <SD_MMC.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 
-// Global instance
-AudioManager& audioManager = AudioManager::getInstance();
-
-AudioManager::AudioManager() {
-    // Initialize with default values
+// Audio callbacks
+void MDCallback(void *cbData, const char *type, bool isUnicode, const char *string) {
+    const char *ptr = reinterpret_cast<const char *>(cbData);
+    (void) isUnicode; // Punt this ball for now
+    if (strcmp(type, "SS") == 0) {
+        Serial.printf("METADATA(%s) '%s' = '%s'\n", ptr, type, string);
+    } else {
+        // Ignore other metadata types for now
+    }
 }
+
+// Constructor is defined as default in the header file
 
 AudioManager::~AudioManager() {
     cleanup();
@@ -15,8 +23,7 @@ AudioManager::~AudioManager() {
 
 void AudioManager::begin() {
     // Initialize I2S audio output
-    audioOutput = new AudioOutputI2S(0, AudioOutputI2S::EXTERNAL_I2S, 10);
-    audioOutput->SetOutputModeMono(false);
+    audioOutput = new AudioOutputI2S();
     audioOutput->SetGain(currentVolume / 100.0);
     
     // Initialize SD_MMC if not already done
@@ -42,60 +49,65 @@ bool AudioManager::playStream(const char* url) {
     
     Serial.printf("Connecting to stream: %s\n", url);
     
-    try {
-        // Create stream source
-        auto* stream = new AudioFileSourceICYStream(url);
-        stream->RegisterMetadataCB(
-            [](void* cbData, const char* type, bool isUnicode, const char* str) {
-                const char* ptr = reinterpret_cast<const char*>(cbData);
-                Serial.printf("METADATA(%s) '%s' = '%s'\n", ptr, type, str);
-            }, (void*)"ICY");
-
-        // Create buffered source with default settings
-        bufferedSource = new AudioFileSourceBuffer(stream, bufferSize);
-        
-        // Buffer handling is now done internally by AudioFileSourceBuffer
-        // The callback is no longer needed as the buffer management is automatic
-        
-        // Create MP3 decoder
-        audioGenerator = new AudioGeneratorMP3();
-        
-        if (audioGenerator->begin(bufferedSource, audioOutput)) {
-            isStreaming = true;
-            notifyPlaybackState(true);
-            return true;
+    // Create stream source
+    if (String(url).startsWith("http")) {
+        // HTTP stream
+        auto* stream = new AudioFileSourceHTTPStream();
+        if (!stream->open(url)) {
+            Serial.println("Failed to open HTTP stream");
+            delete stream;
+            return false;
         }
-    } catch (...) {
-        Serial.println("Exception occurred while starting stream");
+        
+        // Create buffered source
+        bufferedSource = new AudioFileSourceBuffer(stream, 1024 * 8);
+        fileSource = bufferedSource;
+    } else {
+        // Local file
+        fileSource = new AudioFileSourceSD(url);
     }
     
-    cleanup();
-    return false;
+    // Create MP3 decoder
+    audioGenerator = new AudioGeneratorMP3();
+    if (!audioGenerator->begin(fileSource, audioOutput)) {
+        Serial.println("Failed to start MP3 decoder");
+        cleanup();
+        return false;
+    }
+    
+    isStreaming = true;
+    notifyPlaybackState(true);
+    return true;
 }
 
 bool AudioManager::playFile(const char* filename) {
     stop();
     
-    if (!SD_MMC.exists(filename)) {
-        Serial.printf("File not found: %s\n", filename);
+    // Check if file exists (only for SD card files)
+    if (String(filename).startsWith("/")) {
+        if (!SD_MMC.exists(filename)) {
+            Serial.printf("File not found: %s\n", filename);
+            return false;
+        }
+    }
+    
+    // Create file source
+    fileSource = new AudioFileSourceSD(filename);
+    
+    // Create buffered source
+    bufferedSource = new AudioFileSourceBuffer(fileSource, 8 * 1024);
+    
+    // Create MP3 decoder
+    audioGenerator = new AudioGeneratorMP3();
+    if (!audioGenerator->begin(bufferedSource, audioOutput)) {
+        Serial.println("Failed to start MP3 decoder");
+        cleanup();
         return false;
     }
     
-    try {
-        fileSource = new AudioFileSourceSD(filename);
-        audioGenerator = new AudioGeneratorMP3();
-        
-        if (audioGenerator->begin(fileSource, audioOutput)) {
-            isStreaming = false;
-            notifyPlaybackState(true);
-            return true;
-        }
-    } catch (...) {
-        Serial.println("Exception occurred while playing file");
-    }
-    
-    cleanup();
-    return false;
+    isStreaming = false;
+    notifyPlaybackState(true);
+    return true;
 }
 
 void AudioManager::stop() {

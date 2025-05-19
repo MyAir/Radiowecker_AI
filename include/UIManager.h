@@ -3,23 +3,37 @@
 #include <Arduino.h>
 #include <lvgl.h>
 #include "ConfigManager.h"
+#include "DisplayManager.h"
 
 // Forward declare LVGL types we need
 typedef struct _lv_obj_t lv_obj_t;
 typedef struct _lv_event_t lv_event_t;
-typedef struct _lv_style_t lv_style_t;
 typedef struct _lv_obj_class_t lv_obj_class_t;
 
 typedef void (*ui_event_cb_t)(lv_event_t * e);
 
-// Forward declarations for our own types
+// Forward declarations
 class UIManager;
+class DisplayManager;
+class AudioManager;
 
 class UIManager {
+private:
+    static UIManager* instance;
+    
+    // Private constructor
+    UIManager() = default;
+    
+    // Prevent copying and assignment
+    UIManager(const UIManager&) = delete;
+    UIManager& operator=(const UIManager&) = delete;
+    
 public:
     static UIManager& getInstance() {
-        static UIManager instance;
-        return instance;
+        if (!instance) {
+            instance = new UIManager();
+        }
+        return *instance;
     }
 
     /**
@@ -124,10 +138,6 @@ public:
     void showSettingsScreen();
     
 private:
-    UIManager() = default;
-    ~UIManager() = default;
-    UIManager(const UIManager&) = delete;
-    UIManager& operator=(const UIManager&) = delete;
     
     // Theme
     void initTheme();
@@ -144,6 +154,7 @@ private:
     lv_obj_t* radioScreen = nullptr;
     lv_obj_t* settingsScreen = nullptr;
     lv_obj_t* alarmScreen = nullptr;
+    lv_obj_t* currentScreen = nullptr; // Currently active screen
     
     // Home screen elements
     lv_obj_t* timeLabel = nullptr;
@@ -172,15 +183,42 @@ private:
     // Current theme
     bool darkTheme = true;
     
-    // Callback getters
-    AlarmCallback& getAlarmCallback() { return alarmCallback; }
-    VolumeCallback& getVolumeCallback() { return volumeCallback; }
-    BrightnessCallback& getBrightnessCallback() { return brightnessCallback; }
+public:
+    // Public methods for callbacks
+    void triggerAlarmCallback(bool enabled, uint8_t hour, uint8_t minute, bool* days) {
+        if (alarmCallback) {
+            alarmCallback(enabled, hour, minute, days);
+        }
+    }
     
-    // Static callbacks
+    void triggerVolumeCallback(uint8_t volume) {
+        if (volumeCallback) {
+            volumeCallback(volume);
+        }
+    }
+    
+    void setBrightness(uint8_t brightness) {
+        if (brightnessCallback) {
+            brightnessCallback(brightness);
+        }
+    }
+    
+        // Structure for passing data to LVGL callbacks
+    struct UserData {
+        UIManager* ui;
+        int value;  // Can be used for various purposes (e.g., day index)
+    };
+    
+    // Static callbacks for LVGL - these are C-style callback functions
     static void alarm_toggle_cb(lv_event_t* e);
     static void volume_changed_cb(lv_event_t* e);
+    static void radio_volume_changed_cb(lv_event_t* e);
     static void brightness_changed_cb(lv_event_t* e);
+    static void back_btn_clicked_cb(lv_event_t* e);
+    static void theme_switch_cb(lv_event_t* e);
+    static void day_btn_clicked_cb(lv_event_t* e);
+    static void save_alarm_cb(lv_event_t* e);
 };
 
-extern UIManager& uiManager;
+// Initialize static member
+inline UIManager* UIManager::instance = nullptr;

@@ -19,33 +19,30 @@
 #include <WiFiUdp.h>
 #include <NTPClient.h>
 #include <ArduinoOTA.h>
-#include <AsyncTCP.h>
-#include <ESPAsyncWebServer.h>
-#include <AsyncElegantOTA.h>
+#include <WebServer.h>
+#include <ElegantOTA.h> // ElegantOTA works with WebServer
 
 // Hardware-specific libraries
 #include <Arduino_GFX_Library.h>
-#include <Adafruit_FT6206.h>
 
 // LVGL and display helpers
-#include "lvgl_helper.h"
-
-// Local includes
-#include "Audio.h"  // Using local Audio.h from ESP32-audioI2S
+#include <Arduino_GFX_Library.h>
+#include <TAMC_GT911.h>
 
 // Audio components
-#include "AudioGenerator.h"
-#include "AudioOutputI2S.h"
-class AudioFileSourceBuffer;
-class AudioFileSourceICYStream;
-class AudioFileSourceSD;
-#include <AudioFileSourcePROGMEM.h>
+#include <AudioOutputI2S.h>
 #include <AudioGeneratorMP3.h>
+#include <AudioFileSourcePROGMEM.h>
+#include <AudioFileSourceHTTPStream.h>
+#include <AudioFileSourceSD.h>
+#include <AudioFileSourceBuffer.h>
+
+// Display manager
+#include "DisplayManager.h"
 #include <Adafruit_SGP30.h>
 #include <Adafruit_SHT31.h>
-#include "DisplayManager.h"
-#include "ConfigManager.h"
 #include "UIManager.h"
+#include "ConfigManager.h"
 #include "AudioManager.h"
 #include "AlarmManager.h"
 
@@ -67,11 +64,13 @@ class AudioFileSourceSD;
 #define I2S_LRC 13
 
 // Global objects
-#include "Audio.h"
-Audio audio;
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org");
 Preferences preferences;
+
+// Global display manager instance (forward declaration)
+class DisplayManager;
+DisplayManager& displayManager = DisplayManager::getInstance();
 
 // Forward declarations
 void wifi_init();
@@ -84,55 +83,12 @@ void update_display_task(void *parameter);
 void update_sensors_task(void *parameter);
 void check_alarms_task(void *parameter);
 
-// Global display instance
-Arduino_DataBus *bus = new Arduino_ESP32RGBPanel(
-    40,   // DE
-    41,   // VSYNC
-    39,   // HSYNC
-    42,   // PCLK
-    45,   // R0
-    48,   // R1
-    47,   // R2
-    21,   // R3
-    14,   // R4
-    5,    // G0
-    6,    // G1
-    7,    // G2
-    15,   // G3
-    16,   // G4
-    4,    // G5
-    8,    // B0
-    3,    // B1
-    46,   // B2
-    9,    // B3
-    1,    // B4
-    0,    // hsync_polarity
-    8,    // hsync_front_porch
-    4,    // hsync_pulse_width
-    8,    // hsync_back_porch
-    0,    // vsync_polarity
-    8,    // vsync_front_porch
-    4,    // vsync_pulse_width
-    8,    // vsync_back_porch
-    1,    // pclk_active_neg
-    16000000  // prefer_speed
-);
-
-Arduino_RGB_Display *gfx = new Arduino_RGB_Display(
-    800,    // width
-    480,    // height
-    bus,
-    0,      // RST
-    0,      // rotation
-    true,   // auto_flush
-    bus
-);
-
-// Global instances
-UIManager& uiManager = UIManager::getInstance();
-ConfigManager configManager;
-AudioManager& audioManager = AudioManager::getInstance();
-AlarmManager& alarmManager = AlarmManager::getInstance();
+// Forward declarations for manager classes
+#include "DisplayManager.h"
+#include "UIManager.h"
+#include "ConfigManager.h"
+#include "AudioManager.h"
+#include "AlarmManager.h"
 
 // Task handles
 TaskHandle_t displayTaskHandle = NULL;
@@ -143,12 +99,11 @@ TaskHandle_t alarmTaskHandle = NULL;
 
 Adafruit_SGP30 sgp;
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
-AsyncWebServer server(80);
 
-// LVGL display buffer
-static lv_disp_draw_buf_t draw_buf;
-static lv_color_t buf1[800 * 10];
-static lv_color_t buf2[800 * 10];
+// Web server
+WebServer server(80);
+
+// LVGL display buffer is now managed by DisplayManager
 
 // Function declarations
 void setup();
@@ -167,60 +122,67 @@ void check_alarms_task(void *parameter);
 
 // Alarm triggered callback
 void onAlarmTriggered(const Alarm& alarm) {
-    // Update UI to show alarm is ringing
-    uiManager.showAlarmScreen();
+    // Get singleton instances
+    UIManager& ui = UIManager::getInstance();
+    AudioManager& audio = AudioManager::getInstance();
     
-    // Play alarm sound
+    // Show alarm screen
+    ui.showAlarmScreen();
+    
+    // If it's a radio alarm, start playing the radio
     if (alarm.source == 0) { // Radio
-        // Get radio station URL from config
-        // Get the radio station URL from the config manager
-        const char* streamUrl = "";
-        if (alarm.sourceData.stationIndex < configManager.getRadioStations().size()) {
-            streamUrl = configManager.getRadioStations()[alarm.sourceData.stationIndex].url.c_str();
-        }
-        if (streamUrl) {
-            audioManager.playStream(streamUrl);
-        }
-    } else { // MP3
-        audioManager.playFile(alarm.sourceData.filepath);
+        // Use playStream instead as there's no direct playRadio method
+        // Get the URL for the station index
+        String stationUrl = "http://example.com/radio.mp3"; // You should get this from a station list
+        audio.playStream(stationUrl.c_str());
+    } 
+    // If it's an MP3 alarm, play the specified file
+    else if (alarm.source == 1) { // MP3
+        audio.playFile(alarm.sourceData.filepath);
     }
     
-    // Set volume
-    audioManager.setVolume(alarm.volume);
+    // Set volume using the AudioManager singleton instance
+    audio.setVolume(alarm.volume);
 }
 
 void setup() {
-    // Initialize serial
+    // Initialize serial communication
     Serial.begin(115200);
-    while (!Serial);
-    
-    // Initialize display
-    if (gfx->begin()) {
-        gfx->fillScreen(BLACK);
-        gfx->setTextSize(2);
-        gfx->setTextColor(WHITE, BLACK);
-        gfx->setCursor(10, 10);
-        gfx->println("Initializing display...");
-        Serial.println("Display initialized");
-    } else {
-        Serial.println("Display initialization failed!");
-        while (1);
-    }
-
-    // Initialize LVGL with the display
-    lvgl_init(gfx, 17, 18, -1, 0x14); // SDA, SCL, RST, I2C address
+    while (!Serial); // Wait for serial port to connect
     
     // Initialize file system
     if (!SPIFFS.begin(true)) {
-        Serial.println("An error occurred while mounting SPIFFS");
+        Serial.println("SPIFFS initialization failed!");
         while (1);
-    } else {
-        Serial.println("SPIFFS mounted successfully");
+    }
+    
+    // Get singleton instances
+    ConfigManager& config = ConfigManager::getInstance();
+    DisplayManager& display = DisplayManager::getInstance();
+    UIManager& ui = UIManager::getInstance();
+    AlarmManager& alarm = AlarmManager::getInstance();
+    
+    // Initialize configuration
+    if (!config.begin()) {
+        Serial.println("Failed to initialize configuration!");
+        while (1);
+    }
+    
+    // Initialize display
+    if (!display.begin()) {
+        Serial.println("Display initialization failed!");
+        while (1);
+    }
+    
+    // Initialize UI
+    if (!ui.init()) {
+        Serial.println("UI initialization failed!");
+        while (1);
     }
     
     // Initialize WiFi
     wifi_init();
-
+    
     // Initialize time
     time_init();
     
@@ -235,103 +197,178 @@ void setup() {
     
     // Initialize web server
     web_server_init();
-
-    // Initialize UI
-    uiManager.init();
-
-    // Create tasks
-    xTaskCreatePinnedToCore(update_display_task, "Display", 8192, NULL, 1, NULL, 1);
-    xTaskCreatePinnedToCore(update_sensors_task, "Sensors", 4096, NULL, 1, NULL, 1);
-    xTaskCreatePinnedToCore(check_alarms_task, "Alarms", 4096, NULL, 1, NULL, 1);
-
-    // Set alarm callback
-    alarmManager.setAlarmCallback(onAlarmTriggered);
-
-    // Show main screen
-    uiManager.showMainScreen();
-
+    
+    // Set up alarm callback
+    alarm.setAlarmTriggerCallback(onAlarmTriggered);
+    
+    // Create tasks with error checking
+    BaseType_t displayTaskCreated = xTaskCreatePinnedToCore(
+        update_display_task,   // Task function
+        "DisplayTask",         // Task name for debugging
+        4096,                  // Stack size (in words)
+        NULL,                  // Task parameters
+        1,                     // Task priority (higher = higher priority)
+        &displayTaskHandle,    // Task handle
+        1                      // Core to run the task on (core 1)
+    );
+    
+    BaseType_t sensorsTaskCreated = xTaskCreatePinnedToCore(
+        update_sensors_task,   // Task function
+        "SensorsTask",         // Task name for debugging
+        4096,                  // Stack size (in words)
+        NULL,                  // Task parameters
+        1,                     // Task priority
+        &sensorsTaskHandle,    // Task handle
+        1                      // Core to run the task on (core 1)
+    );
+    
+    BaseType_t alarmsTaskCreated = xTaskCreate(
+        check_alarms_task,     // Function
+        "AlarmTask",          // Name
+        4096,                 // Stack size
+        NULL,                 // Parameters
+        1,                    // Priority
+        &alarmTaskHandle      // Task handle - use the correct variable name
+    );
+    
+    // Check if all tasks were created successfully
+    if (displayTaskCreated != pdPASS || 
+        sensorsTaskCreated != pdPASS || 
+        alarmsTaskCreated != pdPASS) {
+        
+        Serial.println("Error: Failed to create one or more tasks!");
+        while (1) { delay(1000); } // Halt if tasks can't be created
+    }
+    
+    Serial.println("Setup complete - System is running");
+    Serial.println("------------------------------------");
+    
+    // Show home screen using the singleton instance
+    ui.showHomeScreen();
+    
     Serial.println("Setup complete");
 }
 
 void loop() {
-    // Handle OTA updates
-    ArduinoOTA.handle();
+    // Get UIManager instance
+    UIManager& ui = UIManager::getInstance();
     
-    // Handle audio
-    audio.loop();
+    // Update UI is handled separately via tasks so no need to call update() here
     
-    // Update time every second
+    // Update time string once per second
     static unsigned long lastTimeUpdate = 0;
     if (millis() - lastTimeUpdate >= 1000) {
         lastTimeUpdate = millis();
         
-        // Update time string
+        // Get current time
         time_t now;
         struct tm timeinfo;
         time(&now);
         localtime_r(&now, &timeinfo);
         
+        // Format time as HH:MM
         char timeStr[6];
         strftime(timeStr, sizeof(timeStr), "%H:%M", &timeinfo);
         
-        // Update date string once a minute
+        // Check if minute has changed
         static int lastMinute = -1;
-        if (timeinfo.tm_min != lastMinute) {
+        bool minuteChanged = (timeinfo.tm_min != lastMinute);
+        
+        if (minuteChanged) {
             lastMinute = timeinfo.tm_min;
             
+            // Format date (e.g., "Monday, January 01")
             char dateStr[32];
-            strftime(dateStr, sizeof(dateStr), "%A, %d %B %Y", &timeinfo);
-            // uiManager.updateDate(dateStr); // Update UI if needed
+            strftime(dateStr, sizeof(dateStr), "%A, %B %d", &timeinfo);
+            
+            // Update UI with date/time
+            ui.updateTime(timeStr);
+        } else {
+            // Update just the time
+            ui.updateTime(timeStr);
         }
+        
+        // Debug output
+        Serial.printf("Time updated: %s\n", timeStr);
     }
     
     // Small delay to prevent watchdog issues
-    vTaskDelay(1 / portTICK_PERIOD_MS);
+    vTaskDelay(pdMS_TO_TICKS(10));
 }
 
 void wifi_init() {
-    // TODO: Load WiFi credentials from config
-    const char* ssid = "your_ssid";
-    const char* password = "your_password";
+    // Get ConfigManager instance
+    ConfigManager& config = ConfigManager::getInstance();
     
+    // Get WiFi credentials from config
+    WiFiConfig wifiConfig = config.getWiFiConfig();
+    const char* ssid = wifiConfig.ssid.c_str();
+    const char* password = wifiConfig.password.c_str();
+    
+    // Connect to WiFi
+    WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
     
+    Serial.print("Connecting to WiFi");
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
         Serial.print(".");
     }
     
     Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.print("IP address: ");
+    Serial.print("Connected to WiFi network with IP Address: ");
     Serial.println(WiFi.localIP());
 }
 
 void time_init() {
-    configTime(0, 0, "pool.ntp.org");
+    // Get ConfigManager instance
+    ConfigManager& config = ConfigManager::getInstance();
     
-    struct tm timeinfo;
-    if (!getLocalTime(&timeinfo)) {
-        Serial.println("Failed to obtain time");
-        return;
+    // Get NTP config
+    NTPConfig ntpConfig = config.getNTPConfig();
+    const char* ntpServer = ntpConfig.server.c_str();
+    const char* timezone = ntpConfig.timezone.c_str();
+    
+    // Configure time
+    configTzTime(timezone, ntpServer);
+    
+    // Wait for time to be set
+    time_t now = time(nullptr);
+    while (now < 8 * 3600 * 2) {
+        delay(100);
+        now = time(nullptr);
     }
     
-    Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+    // Set timezone
+    setenv("TZ", timezone, 1);
+    tzset();
+    
+    Serial.println("Time synchronized");
 }
 
 void sdcard_init() {
-    if (!SD_MMC.begin("/sdcard", true)) {
+    // Get ConfigManager instance
+    ConfigManager& config = ConfigManager::getInstance();
+    
+    // SD card configuration - use hardcoded values since ConfigManager doesn't have these methods
+    const char* mountPoint = "/sdcard";
+    bool mode1bit = true; // 1-bit mode
+    
+    // Initialize SD card
+    if (!SD_MMC.begin(mountPoint, mode1bit)) {
         Serial.println("SD Card Mount Failed");
         return;
     }
     
     uint8_t cardType = SD_MMC.cardType();
+    
     if (cardType == CARD_NONE) {
-        Serial.println("No SD Card attached");
+        Serial.println("No SD card attached");
         return;
     }
     
     Serial.print("SD Card Type: ");
+    
     if (cardType == CARD_MMC) {
         Serial.println("MMC");
     } else if (cardType == CARD_SD) {
@@ -344,112 +381,199 @@ void sdcard_init() {
     
     uint64_t cardSize = SD_MMC.cardSize() / (1024 * 1024);
     Serial.printf("SD Card Size: %lluMB\n", cardSize);
+    
+    // Update config with actual card info
+    config.setSDCardPresent(true);
+    config.setSDCardSize(cardSize);
 }
 
 void sensors_init() {
-    Wire.begin(I2C_SDA, I2C_SCL);
+    // Get ConfigManager instance
+    ConfigManager& config = ConfigManager::getInstance();
     
-    if (!sgp.begin()) {
-        Serial.println("SGP30 sensor not found");
+    // Get I2C pins from config
+    int sdaPin = config.getI2CSDAPin();
+    int sclPin = config.getI2CSCLPin();
+    
+    // Initialize I2C
+    Wire.begin(sdaPin, sclPin);
+    
+    // Check if SGP30 is enabled in config
+    if (config.isSGP30Enabled()) {
+        if (!sgp.begin()) {
+            Serial.println("SGP30 sensor not found");
+            config.setSGP30Available(false);
+        } else {
+            Serial.println("SGP30 sensor initialized");
+            config.setSGP30Available(true);
+        }
+    } else {
+        Serial.println("SGP30 sensor disabled in config");
+        config.setSGP30Available(false);
     }
     
-    if (!sht31.begin(0x44)) {
-        Serial.println("SHT31 sensor not found");
+    // Check if SHT31 is enabled in config
+    if (config.isSHT31Enabled()) {
+        uint8_t sht31Address = config.getSHT31I2CAddress();
+        if (!sht31.begin(sht31Address)) {
+            Serial.println("SHT31 sensor not found");
+            config.setSHT31Available(false);
+        } else {
+            Serial.println("SHT31 sensor initialized");
+            config.setSHT31Available(true);
+            
+            // Configure SHT31 settings from config
+            sht31.heater(config.isSHT31HeaterEnabled());
+            
+            // Set SHT31 resolution if supported
+            #ifdef SHT31_DISPLAY_RESOLUTION
+            sht31.setResolution(SHT31_MS);
+            #endif
+        }
+    } else {
+        Serial.println("SHT31 sensor disabled in config");
+        config.setSHT31Available(false);
+    }
+    
+    // If both sensors are available, set SGP30 environmental data
+    if (config.isSHT31Available() && config.isSGP30Available()) {
+        // Read initial temperature and humidity to set SGP30 environmental data
+        float temperature = sht31.readTemperature();
+        float humidity = sht31.readHumidity();
+        
+        if (!isnan(temperature) && !isnan(humidity)) {
+            // Convert to fixed point 8.8 format (in g/m^3)
+            uint16_t absoluteHumidity = (uint16_t)(1000.0 * 256.0 * (6.112 * exp((17.67 * temperature) / (temperature + 243.5)) * humidity * 2.1674) / (273.15 + temperature));
+            sgp.setHumidity(absoluteHumidity);
+            Serial.println("SGP30 environmental data set from SHT31");
+        }
     }
 }
 
 void audio_init() {
-    // Audio initialization is handled by AudioManager's begin()
-    // This function is kept for compatibility
+    // Initialize the audio manager
+    AudioManager::getInstance().begin();
+    AudioManager::getInstance().setVolume(50);
+    Serial.println("Audio initialized");
 }
 
 void web_server_init() {
-    // Serve static files from SPIFFS
-    server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html");
+    // Get ConfigManager instance
+    ConfigManager& config = ConfigManager::getInstance();
     
-    // Handle file not found
-    server.onNotFound([](AsyncWebServerRequest *request) {
-        request->send(404, "text/plain", "File Not Found");
+    // Handle root URL
+    server.on("/", HTTP_GET, []() {
+        if (SPIFFS.exists("/www/index.html")) {
+            server.sendHeader("Location", "/index.html", true);
+            server.send(302, "text/plain", "");
+        } else {
+            server.send(200, "text/plain", "Web Radio Alarm Clock - Please upload the web interface files to SPIFFS");
+        }
     });
+    
+    // Serve static files from SPIFFS
+    server.serveStatic("/index.html", SPIFFS, "/www/index.html");
+    server.serveStatic("/css", SPIFFS, "/www/css");
+    server.serveStatic("/js", SPIFFS, "/www/js");
+    server.serveStatic("/img", SPIFFS, "/www/img");
+    
+    // Handle 404
+    server.onNotFound([]() {
+        server.send(404, "text/plain", "Not found");
+    });
+    
+    // Initialize ElegantOTA
+    ElegantOTA.begin(&server);
+    
+    // Configure ElegantOTA with credentials from config
+    ElegantOTA.setAuth(
+        config.getOTAUri().c_str(),
+        config.getOTAPassword().c_str()
+    );
     
     // Start server
     server.begin();
     
-    // Start ElegantOTA if available
-    #ifdef ASYNCELEGANTOTA_H_
-    AsyncElegantOTA.begin(&server);
-    #endif
-    
-    Serial.println("HTTP server started");
+    Serial.println("Web server started with ElegantOTA");
 }
 
 void update_display_task(void *parameter) {
     while (1) {
-        // Handle LVGL tasks
-        lv_task_handler();
+        // Update the display using the singleton instance
+        DisplayManager::getInstance().update();
         
-        // Small delay to prevent watchdog issues
-        vTaskDelay(5 / portTICK_PERIOD_MS);
+        // Sleep for 50ms (20 FPS)
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
     vTaskDelete(NULL);
 }
 
 void update_sensors_task(void *parameter) {
+    // Get ConfigManager and UIManager instances once
+    ConfigManager& config = ConfigManager::getInstance();
+    UIManager& ui = UIManager::getInstance();
+    
+    // Timing variables
+    uint32_t lastSHT31Read = 0;
+    uint32_t lastSGP30Read = 0;
+    const uint32_t SHT31_READ_INTERVAL = 2000;  // 2 seconds
+    const uint32_t SGP30_READ_INTERVAL = 1000;  // 1 second
+    
     while (1) {
-        // Update sensor readings
-        if (sht31.begin(0x44)) {  // Check if SHT31 is connected
+        uint32_t currentTime = millis();
+        
+        // Read SHT31 sensor (temperature and humidity) if enabled and time has passed
+        if (config.isSHT31Available() && (currentTime - lastSHT31Read >= SHT31_READ_INTERVAL)) {
             float temperature = sht31.readTemperature();
             float humidity = sht31.readHumidity();
             
             if (!isnan(temperature) && !isnan(humidity)) {
-                char tempStr[16], humStr[16];
-                snprintf(tempStr, sizeof(tempStr), "%.1f°C", temperature);
-                snprintf(humStr, sizeof(humStr), "%.1f%%", humidity);
+                // Update UI with new values
+                ui.updateTemperature(temperature);
+                ui.updateHumidity(humidity);
                 
-                uiManager.updateTemperature(tempStr);
-                uiManager.updateHumidity(humStr);
+                // If SGP30 is available, update its environmental data
+                if (config.isSGP30Available()) {
+                    // Convert to fixed point 8.8 format (in g/m^3)
+                    uint16_t absoluteHumidity = (uint16_t)(1000.0 * 256.0 * (6.112 * exp((17.67 * temperature) / (temperature + 243.5)) * humidity * 2.1674) / (273.15 + temperature));
+                    sgp.setHumidity(absoluteHumidity);
+                }
+                
+                // Debug output
+                Serial.printf("Temperature: %.1f°C, Humidity: %.1f%%\n", temperature, humidity);
             }
+            
+            lastSHT31Read = currentTime;
         }
         
-        if (sgp.begin()) {  // Check if SGP30 is connected
+        // Read SGP30 sensor (TVOC and eCO2) if enabled and time has passed
+        if (config.isSGP30Available() && (currentTime - lastSGP30Read >= SGP30_READ_INTERVAL)) {
             if (sgp.IAQmeasure()) {
                 uint16_t tvoc = sgp.TVOC;
                 uint16_t eco2 = sgp.eCO2;
                 
-                char tvocStr[16], eco2Str[16];
-                snprintf(tvocStr, sizeof(tvocStr), "%d ppb", tvoc);
-                snprintf(eco2Str, sizeof(eco2Str), "%d ppm", eco2);
+                // Update UI with new values
+                ui.updateTVOC(tvoc);
+                ui.updateCO2(eco2);
                 
-                uiManager.updateTVOC(tvocStr);
-                uiManager.updateCO2(eco2Str);
+                // Debug output
+                Serial.printf("TVOC: %d ppb, eCO2: %d ppm\n", tvoc, eco2);
             }
+            
+            lastSGP30Read = currentTime;
         }
         
-        vTaskDelay(pdMS_TO_TICKS(5000));  // Update every 5 seconds
+        // Small delay to prevent task from hogging CPU
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
 void check_alarms_task(void *parameter) {
-    while (true) {
-        // Update alarm manager
-        alarmManager.update();
+    while (1) {
+        // Check if any alarms need to be triggered
+        AlarmManager::getInstance().checkAlarms();
         
-        // Check if any alarms should trigger
-        // For now, we'll just show a placeholder
-        // In a real implementation, you would check for active alarms here
-        bool hasActiveAlarm = false;
-        
-        // TODO: Implement actual alarm checking logic
-        // For now, we'll just show a placeholder
-        if (hasActiveAlarm) {
-            // If we had an active alarm, we would update the UI here
-            // char alarmStr[32];
-            // snprintf(alarmStr, sizeof(alarmStr), "%02d:%02d", nextAlarm.hour, nextAlarm.minute);
-            // uiManager.updateNextAlarm(alarmStr);
-        } else {
-            uiManager.updateNextAlarm("No Alarm");
-        }
-        
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        // Sleep for 1 second
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
