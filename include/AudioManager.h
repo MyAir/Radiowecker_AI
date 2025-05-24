@@ -81,5 +81,4 @@ private:
     void notifyPlaybackState(bool isPlaying);
 };
 
-// Initialize static member
-inline AudioManager* AudioManager::instance = nullptr;
+

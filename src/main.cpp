@@ -403,41 +403,72 @@ void sdcard_init() {
     // Get ConfigManager instance
     ConfigManager& config = ConfigManager::getInstance();
     
-    // SD card configuration - use hardcoded values since ConfigManager doesn't have these methods
-    const char* mountPoint = "/sdcard";
-    bool mode1bit = true; // 1-bit mode
+    // Initialize SPI with the correct pins for ESP32-S3
+    SPI.begin(12, 11, 13, SD_CS);  // SCK, MISO, MOSI, SS
     
-    // Initialize SD card
-    if (!SD_MMC.begin(mountPoint, mode1bit)) {
-        Serial.println("SD Card Mount Failed");
+    Serial.println("[DEBUG] Initializing SD card using SPI mode...");
+    Serial.printf("[DEBUG] Using CS pin: %d\n", SD_CS);
+    
+    // Try to initialize SD card
+    if (!SD.begin(SD_CS)) {
+        Serial.println("[ERROR] SD Card Mount Failed!");
+        Serial.println("Please check:");
+        Serial.println("1. Is the SD card properly inserted?");
+        Serial.println("2. Is the SD card formatted as FAT32?");
+        Serial.println("3. Are the SD card pins correctly connected?");
+        Serial.println("4. Is the SD card slot working?");
+        config.setSDCardPresent(false);
         return;
     }
     
-    uint8_t cardType = SD_MMC.cardType();
+    // If we get here, SD card is initialized
+    uint8_t cardType = SD.cardType();
     
     if (cardType == CARD_NONE) {
-        Serial.println("No SD card attached");
+        Serial.println("[WARN] No SD card detected or card not properly connected");
+        config.setSDCardPresent(false);
         return;
     }
     
-    Serial.print("SD Card Type: ");
-    
-    if (cardType == CARD_MMC) {
-        Serial.println("MMC");
-    } else if (cardType == CARD_SD) {
-        Serial.println("SDSC");
-    } else if (cardType == CARD_SDHC) {
-        Serial.println("SDHC");
-    } else {
-        Serial.println("UNKNOWN");
+    // Print card type
+    Serial.print("[DEBUG] SD Card Type: ");
+    switch (cardType) {
+        case CARD_MMC:    Serial.println("MMC"); break;
+        case CARD_SD:     Serial.println("SDSC"); break;
+        case CARD_SDHC:   Serial.println("SDHC"); break;
+        case CARD_UNKNOWN:Serial.println("UNKNOWN"); break;
+        default:          Serial.println("No card present"); break;
     }
     
-    uint64_t cardSize = SD_MMC.cardSize() / (1024 * 1024);
-    Serial.printf("SD Card Size: %lluMB\n", cardSize);
-    
-    // Update config with actual card info
-    config.setSDCardPresent(true);
-    config.setSDCardSize(cardSize);
+    if (cardType != CARD_NONE) {
+        uint64_t cardSize = SD.cardSize() / (1024 * 1024);
+        Serial.printf("[DEBUG] SD Card Size: %lluMB\n", cardSize);
+        Serial.printf("[DEBUG] Total space: %llu bytes\n", SD.totalBytes());
+        Serial.printf("[DEBUG] Used space: %llu bytes\n", SD.usedBytes());
+        
+        // List files in root directory for debugging
+        File root = SD.open("/");
+        if (root) {
+            Serial.println("[DEBUG] Root directory contents:");
+            File file = root.openNextFile();
+            while (file) {
+                if (!file.isDirectory()) {
+                    Serial.print("  FILE: ");
+                    Serial.print(file.name());
+                    Serial.print("\tSIZE: ");
+                    Serial.println(file.size());
+                }
+                file = root.openNextFile();
+            }
+            root.close();
+        }
+        
+        // Update config with actual card info
+        config.setSDCardPresent(true);
+        config.setSDCardSize(cardSize);
+    } else {
+        config.setSDCardPresent(false);
+    }
 }
 
 void sensors_init() {

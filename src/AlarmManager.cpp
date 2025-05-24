@@ -1,8 +1,13 @@
 #include "AlarmManager.h"
-#include "ConfigManager.h"
-#include <time.h>
 #include <ArduinoJson.h>
-#include <SD_MMC.h>
+#include <SD.h>
+#include <SPI.h>
+#include <SPIFFS.h>
+#include <TimeLib.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+
+// SD Card CS pin - defined in platformio.ini
 
 // Initialize static member
 AlarmManager* AlarmManager::instance = nullptr;
@@ -247,14 +252,23 @@ void AlarmManager::checkAlarms() {
 }
 
 void AlarmManager::loadAlarms() {
-    if (!SD_MMC.begin("/sdcard", true, true)) {
-        Serial.println("SD_MMC initialization failed, cannot load alarms");
+    // Initialize SD card if not already done
+    if (!SD.begin(SD_CS)) {
+        Serial.println("SD card initialization failed, cannot load alarms");
         return;
     }
     
-    File file = SD_MMC.open("/alarms.json", FILE_READ);
+    // Check if alarms file exists
+    if (!SD.exists("/alarms.json")) {
+        Serial.println("No alarms.json file found, creating default");
+        saveAlarms(); // This will create a default file
+        return;
+    }
+    
+    // Open file for reading
+    File file = SD.open("/alarms.json", FILE_READ);
     if (!file) {
-        Serial.println("No alarms.json file found, starting with no alarms");
+        Serial.println("Failed to open alarms file for reading");
         return;
     }
     
@@ -298,13 +312,30 @@ void AlarmManager::loadAlarms() {
 }
 
 void AlarmManager::saveAlarms() {
-    if (!SD_MMC.begin("/sdcard", true, true)) {
-        Serial.println("SD_MMC initialization failed, cannot save alarms");
+    // Initialize SD card if not already done
+    if (!SD.begin(SD_CS)) {
+        Serial.println("SD card initialization failed, cannot save alarms");
         return;
     }
     
-    DynamicJsonDocument doc(2048);
-    JsonArray alarmsArray = doc.to<JsonArray>();
+    // Remove existing file if it exists
+    if (SD.exists("/alarms.json")) {
+        if (!SD.remove("/alarms.json")) {
+            Serial.println("Failed to remove existing alarms file");
+            return;
+        }
+    }
+    
+    // Create new file
+    File file = SD.open("/alarms.json", FILE_WRITE);
+    if (!file) {
+        Serial.println("Failed to create alarms file");
+        return;
+    }
+    
+    // Serialize alarms to JSON
+    DynamicJsonDocument doc(4096);
+    JsonArray alarmsArray = doc.createNestedArray("alarms");
     
     for (const auto& alarm : alarms) {
         JsonObject alarmObj = alarmsArray.createNestedObject();
@@ -313,6 +344,7 @@ void AlarmManager::saveAlarms() {
         alarmObj["minute"] = alarm.minute;
         alarmObj["enabled"] = alarm.enabled;
         
+        // Add days array
         JsonArray daysArray = alarmObj.createNestedArray("repeat");
         for (int i = 0; i < 7; i++) {
             daysArray.add(alarm.repeat[i]);
@@ -321,19 +353,21 @@ void AlarmManager::saveAlarms() {
         alarmObj["volume"] = alarm.volume;
         alarmObj["source"] = alarm.source;
         
-        if (alarm.source == 0) { // Radio
+        // Add source-specific data
+        if (alarm.source == 0) {
             alarmObj["stationIndex"] = alarm.sourceData.stationIndex;
-        } else { // MP3
+        } else {
             alarmObj["filepath"] = alarm.sourceData.filepath;
         }
     }
     
-    File file = SD_MMC.open("/alarms.json", FILE_WRITE);
-    if (!file) {
-        Serial.println("Failed to create alarms.json");
+    // Write to file
+    if (serializeJson(doc, file) == 0) {
+        Serial.println("Failed to write to alarms file");
+        file.close();
         return;
     }
     
-    serializeJson(doc, file);
     file.close();
+    Serial.println("Alarms saved successfully");
 }

@@ -1,8 +1,12 @@
 #include "AudioManager.h"
 #include "ConfigManager.h"
-#include <SD_MMC.h>
+#include <SD.h>
+#include <SPI.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+
+// Initialize static member
+AudioManager* AudioManager::instance = nullptr;
 
 // Audio callbacks
 void MDCallback(void *cbData, const char *type, bool isUnicode, const char *string) {
@@ -83,16 +87,22 @@ bool AudioManager::playStream(const char* url) {
 bool AudioManager::playFile(const char* filename) {
     stop();
     
-    // Check if file exists (only for SD card files)
-    if (String(filename).startsWith("/")) {
-        if (!SD_MMC.exists(filename)) {
-            Serial.printf("File not found: %s\n", filename);
-            return false;
-        }
+    if (!filename) return false;
+    
+    // Check if file exists on SD card
+    if (!SD.exists(filename)) {
+        Serial.printf("File not found: %s\n", filename);
+        return false;
     }
     
-    // Create file source
+    // Create file source directly from filename
     fileSource = new AudioFileSourceSD(filename);
+    
+    if (!fileSource->isOpen()) {
+        Serial.printf("Failed to open file: %s\n", filename);
+        cleanup();
+        return false;
+    }
     
     // Create buffered source
     bufferedSource = new AudioFileSourceBuffer(fileSource, 8 * 1024);

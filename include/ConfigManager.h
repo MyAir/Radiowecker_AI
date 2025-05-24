@@ -1,11 +1,14 @@
 #pragma once
 
 #include <ArduinoJson.h>
-#include <SD_MMC.h>
+#include <SD.h>
+#include <SPI.h>
 #include <SPIFFS.h>
 #include <vector>
 
-#define CONFIG_FILE "/sdcard/config.json"
+// SD Card CS pin - defined in platformio.ini
+
+#define CONFIG_FILE "/config.json"
 #define CONFIG_TEMPLATE "/config.json"
 
 struct WiFiConfig {
@@ -59,7 +62,7 @@ struct SystemConfig {
 
 class ConfigManager {
 private:
-    static ConfigManager* instance;
+    static ConfigManager* instance;  // Declaration only
     
     // Private constructor
     ConfigManager() = default;
@@ -105,7 +108,9 @@ public:
     
     bool begin();
     bool loadConfig();
+    bool loadConfigFromSPIFFS();
     bool saveConfig();
+    bool saveConfigToSPIFFS();
     bool resetToDefault();
     
     // Getters
@@ -155,5 +160,3 @@ public:
     void setSDCardSize(uint64_t size) { sdCardSize = size; }
 };
 
-// Initialize static member
-inline ConfigManager* ConfigManager::instance = nullptr;
