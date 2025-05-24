@@ -148,68 +148,115 @@ void onAlarmTriggered(const Alarm& alarm) {
 void setup() {
     // Initialize serial communication
     Serial.begin(115200);
-    while (!Serial); // Wait for serial port to connect
+    delay(1000); // Add delay before any debug output
+    Serial.println("\n\n[DEBUG] *** BOOT STARTED ***");
+    Serial.println("[DEBUG] Serial initialized");
+    // Don't wait for serial port as it might cause a hang
+    // while (!Serial);
     
     // Initialize file system
+    Serial.println("[DEBUG] Starting SPIFFS initialization...");
     if (!SPIFFS.begin(true)) {
-        Serial.println("SPIFFS initialization failed!");
-        while (1);
+        Serial.println("[ERROR] SPIFFS initialization failed!");
+        Serial.println("[DEBUG] Entering error loop");
+        while (1) {
+            delay(1000);
+            Serial.println("[ERROR] SPIFFS init failed - stuck in error loop");
+        }
     }
+    Serial.println("[DEBUG] SPIFFS initialized successfully");
     
     // Get singleton instances
+    Serial.println("[DEBUG] Getting ConfigManager instance...");
     ConfigManager& config = ConfigManager::getInstance();
+    
+    Serial.println("[DEBUG] Getting DisplayManager instance...");
     DisplayManager& display = DisplayManager::getInstance();
+    
+    Serial.println("[DEBUG] Getting UIManager instance...");
     UIManager& ui = UIManager::getInstance();
+    
+    Serial.println("[DEBUG] Getting AlarmManager instance...");
     AlarmManager& alarm = AlarmManager::getInstance();
     
     // Initialize configuration
+    Serial.println("[DEBUG] Starting ConfigManager initialization...");
     if (!config.begin()) {
-        Serial.println("Failed to initialize configuration!");
-        while (1);
+        Serial.println("[ERROR] ConfigManager initialization failed!");
+        Serial.println("[DEBUG] Entering error loop");
+        while (1) {
+            delay(1000);
+            Serial.println("[ERROR] ConfigManager init failed - stuck in error loop");
+        }
     }
+    Serial.println("[DEBUG] ConfigManager initialized successfully");
     
     // Initialize display
+    Serial.println("[DEBUG] Starting DisplayManager initialization...");
     if (!display.begin()) {
-        Serial.println("Display initialization failed!");
-        while (1);
+        Serial.println("[ERROR] DisplayManager initialization failed!");
+        Serial.println("[DEBUG] Entering error loop");
+        while (1) {
+            delay(1000);
+            Serial.println("[ERROR] DisplayManager init failed - stuck in error loop");
+        }
     }
+    Serial.println("[DEBUG] DisplayManager initialized successfully");
     
     // Initialize UI
+    Serial.println("[DEBUG] Starting UIManager initialization...");
     if (!ui.init()) {
-        Serial.println("UI initialization failed!");
-        while (1);
+        Serial.println("[ERROR] UIManager initialization failed!");
+        Serial.println("[DEBUG] Entering error loop");
+        while (1) {
+            delay(1000);
+            Serial.println("[ERROR] UIManager init failed - stuck in error loop");
+        }
     }
+    Serial.println("[DEBUG] UIManager initialized successfully");
     
     // Initialize WiFi
+    Serial.println("[DEBUG] Starting WiFi initialization...");
     wifi_init();
+    Serial.println("[DEBUG] WiFi initialization completed");
     
     // Initialize time
+    Serial.println("[DEBUG] Starting time initialization...");
     time_init();
+    Serial.println("[DEBUG] Time initialization completed");
     
     // Initialize SD card
+    Serial.println("[DEBUG] Starting SD card initialization...");
     sdcard_init();
+    Serial.println("[DEBUG] SD card initialization completed");
     
     // Initialize sensors
+    Serial.println("[DEBUG] Starting sensors initialization...");
     sensors_init();
+    Serial.println("[DEBUG] Sensors initialization completed");
     
     // Initialize audio
+    Serial.println("[DEBUG] Starting audio initialization...");
     audio_init();
+    Serial.println("[DEBUG] Audio initialization completed");
     
     // Initialize web server
+    Serial.println("[DEBUG] Starting web server initialization...");
     web_server_init();
+    Serial.println("[DEBUG] Web server initialization completed");
     
-    // Set up alarm callback
-    alarm.setAlarmTriggerCallback(onAlarmTriggered);
+    // Create tasks for updating display, reading sensors, and checking alarms
+    Serial.println("[DEBUG] Creating FreeRTOS tasks...");
     
-    // Create tasks with error checking
+    Serial.println("[DEBUG] Creating DisplayTask on core 0");
     BaseType_t displayTaskCreated = xTaskCreatePinnedToCore(
         update_display_task,   // Task function
-        "DisplayTask",         // Task name for debugging
-        4096,                  // Stack size (in words)
-        NULL,                  // Task parameters
-        1,                     // Task priority (higher = higher priority)
-        &displayTaskHandle,    // Task handle
-        1                      // Core to run the task on (core 1)
+        "DisplayTask",        // Task name for debugging
+        4096,                 // Stack size (in words)
+        NULL,                 // Task parameters
+        2,                    // Task priority
+        &displayTaskHandle,   // Task handle
+        0                     // Core to run the task on (core 0)
     );
     
     BaseType_t sensorsTaskCreated = xTaskCreatePinnedToCore(
@@ -250,6 +297,12 @@ void setup() {
 }
 
 void loop() {
+    static bool firstLoop = true;
+    if (firstLoop) {
+        Serial.println("[DEBUG] First loop iteration");
+        firstLoop = false;
+    }
+    
     // Get UIManager instance
     UIManager& ui = UIManager::getInstance();
     
