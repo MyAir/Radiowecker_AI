@@ -138,30 +138,6 @@ public:
      */
     void updateWifiQuality(int quality);
     
-    /**
-     * @brief Update the current weather display
-     * @param icon Icon code (from OpenWeatherMap)
-     * @param temperature Current temperature in Celsius
-     * @param feelsLike Perceived temperature in Celsius
-     */
-    void updateCurrentWeather(const char* icon, float temperature, float feelsLike);
-    
-    /**
-     * @brief Update the morning forecast display
-     * @param icon Icon code (from OpenWeatherMap)
-     * @param temperature Temperature in Celsius
-     * @param rainProb Rain probability (0-100%)
-     */
-    void updateMorningForecast(const char* icon, float temperature, int rainProb);
-    
-    /**
-     * @brief Update the afternoon forecast display
-     * @param icon Icon code (from OpenWeatherMap)
-     * @param temperature Temperature in Celsius
-     * @param rainProb Rain probability (0-100%)
-     */
-    void updateAfternoonForecast(const char* icon, float temperature, int rainProb);
-    
     // Callback types
     typedef void (*AlarmCallback)(bool enabled, uint8_t hour, uint8_t minute, bool days[7]);
     typedef void (*VolumeCallback)(uint8_t volume);
@@ -207,27 +183,8 @@ private:
     lv_obj_t* eco2Label = nullptr;
     lv_obj_t* nextAlarmLabel = nullptr;
     lv_obj_t* currentAlarmScreen = nullptr;
-    
-    // Weather elements
-    lv_obj_t* weatherPanel = nullptr;
-    
-    // Current weather
-    lv_obj_t* currentWeatherPanel = nullptr;
-    lv_obj_t* currentWeatherIcon = nullptr;
-    lv_obj_t* currentTempLabel = nullptr;
+    lv_obj_t* weatherIcon = nullptr;
     lv_obj_t* feelsLikeLabel = nullptr;
-    
-    // Morning forecast
-    lv_obj_t* morningForecastPanel = nullptr;
-    lv_obj_t* morningForecastIcon = nullptr;
-    lv_obj_t* morningTempLabel = nullptr;
-    lv_obj_t* morningRainLabel = nullptr;
-    
-    // Afternoon forecast
-    lv_obj_t* afternoonForecastPanel = nullptr;
-    lv_obj_t* afternoonForecastIcon = nullptr;
-    lv_obj_t* afternoonTempLabel = nullptr;
-    lv_obj_t* afternoonRainLabel = nullptr;
     
     // Status bar elements
     lv_obj_t* wifiSsidLabel = nullptr;
