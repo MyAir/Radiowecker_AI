@@ -24,10 +24,9 @@ private:
     DisplayManager& operator=(const DisplayManager&) = delete;
     
 public:
+    // Static instance getter
     static DisplayManager& getInstance() {
-        if (!instance) {
-            instance = new DisplayManager();
-        }
+        static DisplayManager* instance = new DisplayManager();
         return *instance;
     }
 
@@ -83,12 +82,12 @@ private:
     TAMC_GT911 *touch = nullptr;
     bool touch_initialized = false;
 
-    // LVGL display buffer
-    static constexpr uint16_t screenWidth = SCREEN_WIDTH;
-    static constexpr uint16_t screenHeight = SCREEN_HEIGHT;
-    static constexpr uint16_t bufferSize = screenWidth * 40; // Adjust based on available memory
-    lv_color_t *lv_display_buf1 = nullptr;
-    lv_color_t *lv_display_buf2 = nullptr;
+    // Display buffer
+    static const uint16_t screenWidth = SCREEN_WIDTH;
+    static const uint16_t screenHeight = SCREEN_HEIGHT;
+    static const uint16_t bufferSize = SCREEN_WIDTH * 40;
+    static lv_color_t* lv_display_buf1;
+    static lv_color_t* lv_display_buf2;
     lv_disp_draw_buf_t draw_buf;
     lv_disp_drv_t disp_drv;
     lv_indev_drv_t indev_drv;
@@ -122,5 +121,3 @@ private:
     bool isTouched();
 };
 
-// Initialize static member
-inline DisplayManager* DisplayManager::instance = nullptr;

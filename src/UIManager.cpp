@@ -56,33 +56,81 @@ void UIManager::showMainScreen() {
 }
 
 void UIManager::updateTime(const char* timeStr) {
-    if (timeLabel) {
-        lv_label_set_text(timeLabel, timeStr);
-        Serial.printf("[DEBUG] UIManager::updateTime(%s)\n", timeStr);
-        
-        // Invalidate the label and its parent to ensure proper redraw
-        lv_obj_invalidate(timeLabel);
-        if (lv_obj_get_parent(timeLabel)) {
-            lv_obj_invalidate(lv_obj_get_parent(timeLabel));
+    static uint32_t lastUpdate = 0;
+    uint32_t now = millis();
+    
+    if (!timeLabel) {
+        static uint32_t lastErrorLog = 0;
+        if (now - lastErrorLog > 5000) {  // Log error max every 5 seconds
+            Serial.println("[ERROR] Time label is null!");
+            lastErrorLog = now;
         }
-    } else {
-        Serial.println("[WARNING] timeLabel is null in updateTime");
+        return;
     }
+    
+    if (!timeStr) {
+        Serial.println("[WARNING] Time string is null!");
+        return;
+    }
+    
+    // Only update if the time has actually changed and at least 100ms has passed
+    const char* currentText = lv_label_get_text(timeLabel);
+    if (currentText && strcmp(currentText, timeStr) == 0) {
+        return;
+    }
+    
+    // Debug output
+    if (now - lastUpdate >= 1000) {  // Log at most once per second
+        Serial.printf("[DEBUG] Updating time from '%s' to '%s'\n", 
+                     currentText ? currentText : "NULL", timeStr);
+        lastUpdate = now;
+    }
+    
+    // Update the label text
+    lv_label_set_text(timeLabel, timeStr);
+    
+    // Force an immediate update of the display
+    lv_obj_invalidate(timeLabel);
+    lv_refr_now(lv_disp_get_default());
 }
 
 void UIManager::updateDate(const char* dateStr) {
-    if (dateLabel) {
-        lv_label_set_text(dateLabel, dateStr);
-        Serial.printf("[DEBUG] UIManager::updateDate(%s)\n", dateStr);
-        
-        // Invalidate the label and its parent to ensure proper redraw
-        lv_obj_invalidate(dateLabel);
-        if (lv_obj_get_parent(dateLabel)) {
-            lv_obj_invalidate(lv_obj_get_parent(dateLabel));
+    static uint32_t lastUpdate = 0;
+    uint32_t now = millis();
+    
+    if (!dateLabel) {
+        static uint32_t lastErrorLog = 0;
+        if (now - lastErrorLog > 5000) {  // Log error max every 5 seconds
+            Serial.println("[ERROR] Date label is null!");
+            lastErrorLog = now;
         }
-    } else {
-        Serial.println("[WARNING] dateLabel is null in updateDate");
+        return;
     }
+    
+    if (!dateStr) {
+        Serial.println("[WARNING] Date string is null!");
+        return;
+    }
+    
+    // Only update if the date has actually changed and at least 100ms has passed
+    const char* currentText = lv_label_get_text(dateLabel);
+    if (currentText && strcmp(currentText, dateStr) == 0) {
+        return;
+    }
+    
+    // Debug output
+    if (now - lastUpdate >= 1000) {  // Log at most once per second
+        Serial.printf("[DEBUG] Updating date from '%s' to '%s'\n", 
+                     currentText ? currentText : "NULL", dateStr);
+        lastUpdate = now;
+    }
+    
+    // Update the label text
+    lv_label_set_text(dateLabel, dateStr);
+    
+    // Force an immediate update of the display
+    lv_obj_invalidate(dateLabel);
+    lv_refr_now(lv_disp_get_default());
 }
 
 void UIManager::showMessage(const char* title, const char* message) {

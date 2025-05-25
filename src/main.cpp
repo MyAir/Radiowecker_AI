@@ -310,33 +310,42 @@ void loop() {
     
     // Update time string once per second
     static unsigned long lastTimeUpdate = 0;
+    static char lastTimeStr[9] = "";
+    static char lastDateStr[32] = "";
+    static uint8_t updateCounter = 0;
+    
     unsigned long now = millis();
     if (now - lastTimeUpdate >= 1000) {
         lastTimeUpdate = now;
+        updateCounter++;
+        
+        // Only print memory info every 10 seconds
+        if (updateCounter % 10 == 0) {
+            Serial.printf("[MEM] Free heap: %d bytes\n", ESP.getFreeHeap());
+        }
         
         // Get current time
         struct tm timeinfo;
         char timeStr[9];  // HH:MM:SS + null terminator
         char dateStr[32];
         
-        if (!getLocalTime(&timeinfo)) {
-            Serial.println("Failed to obtain time");
-            // Set default values if time can't be obtained
-            strcpy(timeStr, "--:--:--");
-            strcpy(dateStr, "No date");
-        } else {
+        if (getLocalTime(&timeinfo)) {
             // Format time as HH:MM:SS
             strftime(timeStr, sizeof(timeStr), "%H:%M:%S", &timeinfo);
             // Format date as Weekday, DD Month
             strftime(dateStr, sizeof(dateStr), "%A, %d %B", &timeinfo);
+            
+            // Only update if the time or date has changed
+            if (strcmp(timeStr, lastTimeStr) != 0) {
+                strcpy(lastTimeStr, timeStr);
+                ui.updateTime(timeStr);
+            }
+            
+            if (strcmp(dateStr, lastDateStr) != 0) {
+                strcpy(lastDateStr, dateStr);
+                ui.updateDate(dateStr);
+            }
         }
-        
-        // Update the UI with current time and date
-        ui.updateTime(timeStr);
-        ui.updateDate(dateStr);
-        
-        // Debug output
-        Serial.printf("Time updated: %s %s\n", timeStr, dateStr);
     }
     
     // Small delay to prevent watchdog issues
@@ -580,8 +589,9 @@ void update_display_task(void *parameter) {
         // Update the display using the singleton instance
         DisplayManager::getInstance().update();
         
-        // Sleep for 50ms (20 FPS)
-        vTaskDelay(pdMS_TO_TICKS(50));
+        // Small delay to allow other tasks to run
+        // No need for a long delay as we want smooth UI updates
+        vTaskDelay(pdMS_TO_TICKS(1)); // 1ms delay for high refresh rate
     }
     vTaskDelete(NULL);
 }

@@ -17,15 +17,17 @@
 TAMC_GT911* DisplayManager::touch_controller = nullptr;
 
 // Initialize static members
+lv_color_t* DisplayManager::lv_display_buf1 = nullptr;
+lv_color_t* DisplayManager::lv_display_buf2 = nullptr;
 bool DisplayManager::touch_has_signal = false;
 int16_t DisplayManager::touch_last_x = 0;
 int16_t DisplayManager::touch_last_y = 0;
 
 DisplayManager::DisplayManager() 
     : bus(nullptr), gfx(nullptr), touch(nullptr),
-      lv_display_buf1(nullptr), lv_display_buf2(nullptr),
       disp(nullptr), indev_touch(nullptr),
-      currentBrightness(80)  // Default to 80% brightness
+      currentBrightness(80),  // Default to 80% brightness
+      touch_initialized(false)
 {
 }
 
@@ -237,29 +239,42 @@ bool DisplayManager::initLVGL() {
     
     Serial.printf("Screen dimensions: %dx%d\n", screenWidth, screenHeight);
     
-    // Use a very small buffer size for stability
-    size_t buf_size = screenWidth * 10; 
+    // Use a larger buffer for better performance (1/10th of screen size)
+    size_t buf_size = (screenWidth * screenHeight) / 10;
     
-    // Single buffer only for maximum stability
-    lv_display_buf1 = (lv_color_t*)malloc(buf_size * sizeof(lv_color_t));
-    if (!lv_display_buf1) {
-        Serial.println("ERROR: Failed to allocate LVGL display buffer!");
+    // Allocate display buffer (double buffering for smoother updates)
+    lv_display_buf1 = (lv_color_t*)heap_caps_malloc(buf_size * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+    lv_display_buf2 = (lv_color_t*)heap_caps_malloc(buf_size * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+    
+    if (!lv_display_buf1 || !lv_display_buf2) {
+        Serial.println("ERROR: Failed to allocate LVGL display buffers!");
+        if (lv_display_buf1) free(lv_display_buf1);
+        if (lv_display_buf2) free(lv_display_buf2);
+        lv_display_buf1 = nullptr;
+        lv_display_buf2 = nullptr;
         return false;
     }
     
-    // Initialize display buffer (single buffer)
-    lv_disp_draw_buf_init(&draw_buf, lv_display_buf1, NULL, buf_size);
+    // Initialize display buffer with double buffering
+    lv_disp_draw_buf_init(&draw_buf, lv_display_buf1, lv_display_buf2, buf_size);
     
-    // Initialize display driver with absolute minimum settings
+    // Initialize display driver with optimized settings
     lv_disp_drv_init(&disp_drv);
     disp_drv.hor_res = screenWidth;
     disp_drv.ver_res = screenHeight;
     disp_drv.flush_cb = lvgl_flush_cb;
     disp_drv.draw_buf = &draw_buf;
-    disp_drv.full_refresh = true;    // More stable
-    disp_drv.direct_mode = false;    // More stable
-    disp_drv.antialiasing = false;   // Disable antialiasing
+    disp_drv.full_refresh = false;   // Use partial updates
+    disp_drv.direct_mode = false;    // Use buffered mode
+    disp_drv.antialiasing = false;   // Disable antialiasing for better performance
+    disp_drv.sw_rotate = 0;          // No software rotation
+    disp_drv.screen_transp = 0;      // No transparency
+    
+    // Register the display driver
     disp = lv_disp_drv_register(&disp_drv);
+    
+    // Set a faster refresh rate (using the correct API for this LVGL version)
+    // The refresh rate is controlled by the lv_timer_handler() call frequency in the update() method
     
     // Touch input only if available
     if (touch_initialized && touch) {
@@ -326,31 +341,22 @@ void DisplayManager::setBrightness(uint8_t brightness) {
 }
 
 void DisplayManager::update() {
-    // Process LVGL tasks with higher priority
-    lv_timer_handler();
-    
-    // Update display at 30Hz (33ms interval)
-    static uint32_t lastUpdate = 0;
-    static uint32_t lastFullRefresh = 0;
+    static uint32_t lastMemoryPrint = 0;
     uint32_t now = millis();
     
-    // Process LVGL tasks every 20ms (50Hz)
-    if (now - lastUpdate >= 20) {
-        lastUpdate = now;
-        
-        // Only do a full refresh every 2 seconds to reduce flickering
-        if (now - lastFullRefresh >= 2000) {
-            lastFullRefresh = now;
-            // Force a full display refresh
-            lv_refr_now(NULL);
-            
-            // Debug: Print memory usage
-            Serial.printf("[Display] Memory usage - Free: %d, Min free: %d\n", 
-                         heap_caps_get_free_size(MALLOC_CAP_8BIT),
-                         heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
-        }
-        lastLvglUpdate = now;
+    // Process LVGL tasks - this will handle all pending screen updates
+    // Call this as frequently as possible for smooth UI
+    lv_timer_handler();
+    
+    // Debug: Print memory usage every 30 seconds
+    if (now - lastMemoryPrint >= 30000) {
+        lastMemoryPrint = now;
+        Serial.printf("[Display] Memory - Free: %d, Min free: %d\n",
+                     heap_caps_get_free_size(MALLOC_CAP_8BIT),
+                     heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
     }
+    
+    lastLvglUpdate = now;
     
     // Check touch at a lower frequency (10Hz) to reduce processing load
     if (now - lastTouchCheck > 100 && touch != nullptr && touch_initialized) {
