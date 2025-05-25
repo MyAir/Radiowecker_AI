@@ -32,6 +32,12 @@ public:
     }
 
     /**
+     * @brief Perform a hardware reset of the display and touch components
+     * This helps resolve initialization issues by resetting all display-related pins
+     */
+    void performHardwareReset();
+    
+    /**
      * @brief Initialize the display manager
      * @return true if initialization was successful, false otherwise
      */
@@ -56,7 +62,7 @@ public:
     static void lvgl_touchpad_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data);
     
     // Getters
-    Arduino_RGB_Display* getGfx() { return gfx; }
+    Arduino_GFX* getGfx() { return gfx; }
     TAMC_GT911* getTouch() { return touch; }
     
     /**
@@ -73,7 +79,7 @@ private:
 
     // Display and touch instances
     Arduino_ESP32RGBPanel *bus = nullptr;
-    Arduino_RGB_Display *gfx = nullptr;
+    Arduino_GFX *gfx = nullptr; // Using the base class to allow for different display implementations
     TAMC_GT911 *touch = nullptr;
     bool touch_initialized = false;
 

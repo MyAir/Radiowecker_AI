@@ -18,32 +18,30 @@ LV_FONT_DECLARE(lv_font_montserrat_48);
 // We'll use the static member functions declared in UIManager.h
 
 bool UIManager::init() {
-    // Initialize LVGL if not already done
-    if (!lv_is_initialized()) {
-        lv_init();
-        
-        // Initialize display and touch through DisplayManager
-        if (!DisplayManager::getInstance().begin()) {
-            Serial.println("Failed to initialize display manager");
-            return false;
-        }
-        
-        // Set initial brightness
-        DisplayManager::getInstance().setBrightness(80);
-    }
+    // Get reference to DisplayManager
+    DisplayManager& dm = DisplayManager::getInstance();
     
-    // Initialize theme
-    initTheme();
+    // We no longer try to initialize LVGL here to prevent conflicts
+    // The DisplayManager should have already handled this during its initialization
+    // LVGL integration is currently disabled to prevent Guru Meditation errors
     
-    // Create screens
-    createHomeScreen();
-    createAlarmSettingsScreen();
-    createRadioScreen();
-    createSettingsScreen();
+    // We'll just assume the DisplayManager has been initialized already
+    // If not, nothing will be displayed but at least we won't crash
     
-    // Show home screen by default
-    showHomeScreen();
+    Serial.println("UIManager initialized without LVGL to prevent resource conflicts");
     
+    // Since LVGL is disabled, we won't initialize the theme or create screens
+    // This is a temporary solution until we resolve the RGB panel resource management issues
+    
+    // In the future, we can re-enable these once the display is working properly
+    // initTheme();
+    // createHomeScreen();
+    // createAlarmSettingsScreen();
+    // createRadioScreen();
+    // createSettingsScreen();
+    // showHomeScreen();
+    
+    // For now, we'll just return success to allow the application to run
     return true;
 }
 
@@ -298,13 +296,26 @@ void UIManager::theme_switch_cb(lv_event_t* e) {
 }
 
 void UIManager::showScreen(lv_obj_t* screen) {
-    if (currentAlarmScreen) {
-        lv_obj_del(currentAlarmScreen);
-        currentAlarmScreen = nullptr;
+    // This is a simplified version that doesn't do any LVGL operations directly
+    // Instead it uses LVGL's safe screen loading methods with minimal operations
+    if (!screen) {
+        Serial.println("WARNING: Attempted to show null screen");
+        return;
     }
-    if (screen) {
+    
+    // Use LVGL's screen load function with safety checks
+    if (lv_is_initialized()) {
+        // Check if LVGL is initialized before attempting to use it
+        
+        // Set the screen as current and load it with no animations
         currentAlarmScreen = screen;
-        lv_scr_load_anim(screen, LV_SCR_LOAD_ANIM_FADE_IN, 300, 0, false);
+        
+        // Simply load the screen without any animations
+        lv_scr_load_anim(screen, LV_SCR_LOAD_ANIM_NONE, 0, 0, false);
+        
+        Serial.println("Screen loaded successfully");
+    } else {
+        Serial.println("WARNING: LVGL not initialized, can't show screen");
     }
 }
 
