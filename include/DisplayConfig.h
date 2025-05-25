@@ -22,8 +22,9 @@
 #define TFT_D6 6
 #define TFT_D7 7
 
-// Backlight control
-#define TFT_BL 44    // Backlight control pin
+// Backlight control - DISABLED to prevent crashes
+// Setting to -1 completely disables the backlight control code path
+#define TFT_BL -1
 
 // Touch screen configuration (GT911)
 #define TOUCH_GT911_SCL 18

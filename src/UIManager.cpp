@@ -21,18 +21,31 @@ bool UIManager::init() {
     // Get reference to DisplayManager
     DisplayManager& dm = DisplayManager::getInstance();
     
-    // The DisplayManager should have already handled LVGL initialization
-    // We'll just assume the DisplayManager has been initialized already
+    // Verify that LVGL is properly initialized
+    if (lv_disp_get_default() == NULL) {
+        Serial.println("[ERROR] LVGL display not initialized! Cannot create UI.");
+        return false;
+    }
     
     Serial.println("UIManager initializing UI elements");
     
-    // Enable LVGL UI initialization
+    // Clear the screen to ensure we're working with a clean canvas
+    lv_obj_clean(lv_scr_act());
+    
+    // Initialize styles first
     initTheme();
+    
+    // Create all screens
     createHomeScreen();
     createAlarmSettingsScreen();
     createRadioScreen();
     createSettingsScreen();
+    
+    // Show the home screen with a simple animation
     showHomeScreen();
+    
+    // Force an immediate refresh to make sure elements are visible
+    lv_refr_now(lv_disp_get_default());
     
     Serial.println("UIManager initialization complete");
     return true;
@@ -45,12 +58,25 @@ void UIManager::showMainScreen() {
 void UIManager::updateTime(const char* timeStr) {
     if (timeLabel) {
         lv_label_set_text(timeLabel, timeStr);
+        Serial.printf("[DEBUG] UIManager::updateTime(%s)\n", timeStr);
+        
+        // Just mark the object as needing a redraw
+        lv_obj_invalidate(timeLabel);
+        // Let the DisplayManager handle the refresh timing
+    } else {
+        Serial.println("[WARNING] timeLabel is null in updateTime");
     }
 }
 
 void UIManager::updateDate(const char* dateStr) {
     if (dateLabel) {
         lv_label_set_text(dateLabel, dateStr);
+        Serial.printf("[DEBUG] UIManager::updateDate(%s)\n", dateStr);
+        
+        // Just mark the object as needing a redraw
+        lv_obj_invalidate(dateLabel);
+    } else {
+        Serial.println("[WARNING] dateLabel is null in updateDate");
     }
 }
 
@@ -92,6 +118,12 @@ void UIManager::updateTemperature(float temp) {
         char buf[16];
         snprintf(buf, sizeof(buf), "%.1f°C", temp);
         lv_label_set_text(tempLabel, buf);
+        Serial.printf("[DEBUG] UIManager::updateTemperature(%.1f°C)\n", temp);
+        
+        // Just mark the object as needing a redraw
+        lv_obj_invalidate(tempLabel);
+    } else {
+        Serial.println("[WARNING] tempLabel is null in updateTemperature");
     }
 }
 
@@ -100,6 +132,12 @@ void UIManager::updateHumidity(float humidity) {
         char buf[16];
         snprintf(buf, sizeof(buf), "%.0f%%", humidity);
         lv_label_set_text(humidityLabel, buf);
+        Serial.printf("[DEBUG] UIManager::updateHumidity(%.0f%%)\n", humidity);
+        
+        // Just mark the object as needing a redraw
+        lv_obj_invalidate(humidityLabel);
+    } else {
+        Serial.println("[WARNING] humidityLabel is null in updateHumidity");
     }
 }
 
@@ -108,6 +146,12 @@ void UIManager::updateTVOC(uint16_t tvoc) {
         char buf[16];
         snprintf(buf, sizeof(buf), "TVOC: %uppb", tvoc);
         lv_label_set_text(tvocLabel, buf);
+        Serial.printf("[DEBUG] UIManager::updateTVOC(%u ppb)\n", tvoc);
+        
+        // Just mark the object as needing a redraw
+        lv_obj_invalidate(tvocLabel);
+    } else {
+        Serial.println("[WARNING] tvocLabel is null in updateTVOC");
     }
 }
 
@@ -116,6 +160,12 @@ void UIManager::updateCO2(uint16_t eco2) {
         char buf[16];
         snprintf(buf, sizeof(buf), "eCO2: %uppm", eco2);
         lv_label_set_text(eco2Label, buf);
+        Serial.printf("[DEBUG] UIManager::updateCO2(%u ppm)\n", eco2);
+        
+        // Just mark the object as needing a redraw
+        lv_obj_invalidate(eco2Label);
+    } else {
+        Serial.println("[WARNING] eco2Label is null in updateCO2");
     }
 }
 
@@ -387,21 +437,30 @@ void UIManager::initTheme() {
     lv_style_set_text_color(&timeStyle, lv_color_white());
     
     lv_style_init(&dateStyle);
-    lv_style_set_text_font(&dateStyle, &lv_font_montserrat_24);
+    lv_style_set_text_font(&dateStyle, &lv_font_montserrat_20);
     lv_style_set_text_color(&dateStyle, lv_color_white());
     
     lv_style_init(&infoStyle);
     lv_style_set_text_font(&infoStyle, &lv_font_montserrat_16);
     lv_style_set_text_color(&infoStyle, lv_color_white());
     
+    // Button styles - enhanced for better visibility and touch target
     lv_style_init(&buttonStyle);
+    lv_style_set_bg_color(&buttonStyle, lv_color_hex(0x2196F3)); // Blue
+    lv_style_set_text_color(&buttonStyle, lv_color_white());
     lv_style_set_radius(&buttonStyle, 10);
-    lv_style_set_bg_color(&buttonStyle, lv_color_hex(0x4CAF50));
-    lv_style_set_bg_opa(&buttonStyle, LV_OPA_COVER);
-    lv_style_set_pad_all(&buttonStyle, 10);
+    lv_style_set_border_width(&buttonStyle, 3); // Thicker border
+    lv_style_set_border_color(&buttonStyle, lv_color_hex(0x1976D2)); // Darker blue
+    lv_style_set_shadow_width(&buttonStyle, 8); // Larger shadow
+    lv_style_set_shadow_ofs_y(&buttonStyle, 5);
+    lv_style_set_pad_all(&buttonStyle, 10); // More padding for easier touch target
+    lv_style_set_text_font(&buttonStyle, &lv_font_montserrat_18); // Larger text
     
     lv_style_init(&buttonPressedStyle);
-    lv_style_set_bg_color(&buttonPressedStyle, lv_color_hex(0x388E3C));
+    lv_style_set_bg_color(&buttonPressedStyle, lv_color_hex(0x1976D2)); // Darker blue
+    lv_style_set_text_color(&buttonPressedStyle, lv_color_white());
+    lv_style_set_shadow_width(&buttonPressedStyle, 0);
+    lv_style_set_bg_opa(&buttonPressedStyle, LV_OPA_80);
     
     // Set the default screen color
     static lv_style_t screen_style;
@@ -428,119 +487,174 @@ void UIManager::initTheme() {
 }
 
 void UIManager::createHomeScreen() {
-    // Initialize screens if not already done
-    if (!homeScreen) {
-        homeScreen = lv_obj_create(NULL);
-        lv_obj_set_style_bg_color(homeScreen, lv_color_black(), LV_PART_MAIN);
-        lv_obj_set_size(homeScreen, 800, 480);  // Use actual display dimensions
-        
-        // Create all UI elements
-        timeLabel = lv_label_create(homeScreen);
-        dateLabel = lv_label_create(homeScreen);
-        tempLabel = lv_label_create(homeScreen);
-        humidityLabel = lv_label_create(homeScreen);
-        tvocLabel = lv_label_create(homeScreen);
-        eco2Label = lv_label_create(homeScreen);
-        nextAlarmLabel = lv_label_create(homeScreen);
-        weatherIcon = lv_label_create(homeScreen);
-        feelsLikeLabel = lv_label_create(homeScreen);
-        
-        // Initialize screens
-        if (!settingsScreen) settingsScreen = lv_obj_create(NULL);
-        if (!alarmScreen) alarmScreen = lv_obj_create(NULL);
-        currentAlarmScreen = nullptr;
-        
-        // Time label
-        lv_obj_add_style(timeLabel, &timeStyle, 0);
-        lv_label_set_text(timeLabel, "--:--");
-        lv_obj_align(timeLabel, LV_ALIGN_TOP_MID, 0, 40);
-        
-        // Date label
-        lv_obj_add_style(dateLabel, &dateStyle, 0);
-        lv_label_set_text(dateLabel, "--.--.----");
-        lv_obj_align_to(dateLabel, timeLabel, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
-        
-        // Weather info
-        lv_obj_add_style(weatherIcon, &infoStyle, 0);
-        lv_label_set_text(weatherIcon, "☀️");
-        lv_obj_align(weatherIcon, LV_ALIGN_TOP_RIGHT, -20, 20);
-        
-        // Temperature
-        lv_obj_add_style(tempLabel, &infoStyle, 0);
-        lv_label_set_text(tempLabel, "--°C");
-        lv_obj_align_to(tempLabel, weatherIcon, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 5);
-        
-        // Air quality info
-        lv_obj_add_style(humidityLabel, &infoStyle, 0);
-        lv_label_set_text(humidityLabel, "Humidity: --%");
-        lv_obj_align(humidityLabel, LV_ALIGN_BOTTOM_LEFT, 20, -20);
-        
-        lv_obj_add_style(tvocLabel, &infoStyle, 0);
-        lv_label_set_text(tvocLabel, "TVOC: -- ppb");
-        lv_obj_align_to(tvocLabel, humidityLabel, LV_ALIGN_OUT_RIGHT_MID, 20, 0);
-        
-        lv_obj_add_style(eco2Label, &infoStyle, 0);
-        lv_label_set_text(eco2Label, "eCO2: -- ppm");
-        lv_obj_align_to(eco2Label, tvocLabel, LV_ALIGN_OUT_RIGHT_MID, 20, 0);
-        
-        // Next alarm
-        lv_obj_add_style(nextAlarmLabel, &infoStyle, 0);
-        lv_label_set_text(nextAlarmLabel, "Next alarm: None");
-        lv_obj_align(nextAlarmLabel, LV_ALIGN_BOTTOM_RIGHT, -20, -20);
-        
-        // Create bottom navigation buttons
-        lv_obj_t* btnAlarm = lv_btn_create(homeScreen);
-        lv_obj_add_style(btnAlarm, &buttonStyle, 0);
-        lv_obj_add_style(btnAlarm, &buttonPressedStyle, LV_STATE_PRESSED);
-        lv_obj_set_size(btnAlarm, 120, 50);
-        lv_obj_align(btnAlarm, LV_ALIGN_BOTTOM_MID, -130, -20);
-        lv_obj_t* btnAlarmLabel = lv_label_create(btnAlarm);
-        lv_label_set_text(btnAlarmLabel, "Alarm");
-        lv_obj_center(btnAlarmLabel);
-        lv_obj_add_event_cb(btnAlarm, [](lv_event_t* e) {
-            UIManager::getInstance().showAlarmSettingsScreen();
-        }, LV_EVENT_CLICKED, NULL);
-        
-        lv_obj_t* btnRadio = lv_btn_create(homeScreen);
-        lv_obj_add_style(btnRadio, &buttonStyle, 0);
-        lv_obj_add_style(btnRadio, &buttonPressedStyle, LV_STATE_PRESSED);
-        lv_obj_set_size(btnRadio, 120, 50);
-        lv_obj_align(btnRadio, LV_ALIGN_BOTTOM_MID, 0, -20);
-        lv_obj_t* btnRadioLabel = lv_label_create(btnRadio);
-        lv_label_set_text(btnRadioLabel, "Radio");
-        lv_obj_center(btnRadioLabel);
-        lv_obj_add_event_cb(btnRadio, [](lv_event_t* e) {
-            UIManager::getInstance().showRadioScreen();
-        }, LV_EVENT_CLICKED, NULL);
-        
-        lv_obj_t* btnSettings = lv_btn_create(homeScreen);
-        lv_obj_add_style(btnSettings, &buttonStyle, 0);
-        lv_obj_add_style(btnSettings, &buttonPressedStyle, LV_STATE_PRESSED);
-        lv_obj_set_size(btnSettings, 120, 50);
-        lv_obj_align(btnSettings, LV_ALIGN_BOTTOM_MID, 130, -20);
-        lv_obj_t* btnSettingsLabel = lv_label_create(btnSettings);
-        lv_label_set_text(btnSettingsLabel, "Settings");
-        lv_obj_center(btnSettingsLabel);
-        lv_obj_add_event_cb(btnSettings, [](lv_event_t* e) {
-            UIManager::getInstance().showSettingsScreen();
-        }, LV_EVENT_CLICKED, NULL);
-        
-        // Add status bar text
-        lv_obj_t* statusBar = lv_obj_create(homeScreen);
-        lv_obj_remove_style_all(statusBar);
-        lv_obj_set_size(statusBar, 800, 30);
-        lv_obj_align(statusBar, LV_ALIGN_TOP_LEFT, 0, 0);
-        lv_obj_set_style_bg_color(statusBar, lv_color_hex(0x333333), 0);
-        lv_obj_set_style_bg_opa(statusBar, LV_OPA_COVER, 0);
-        
-        lv_obj_t* statusLabel = lv_label_create(statusBar);
-        lv_obj_add_style(statusLabel, &infoStyle, 0);
-        lv_label_set_text(statusLabel, "Radio Alarm Clock");
-        lv_obj_align(statusLabel, LV_ALIGN_LEFT_MID, 10, 0);
-        
-        // Load the home screen
-        lv_scr_load(homeScreen);
+    Serial.println("Creating home screen");
+    
+    // Delete old screen if it exists to start fresh
+    if (homeScreen) {
+        lv_obj_del(homeScreen);
+        homeScreen = NULL;
     }
+    
+    // Create a fresh home screen
+    homeScreen = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(homeScreen, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_size(homeScreen, 800, 480);
+    
+    // Create a large panel for the time and date
+    lv_obj_t* timePanel = lv_obj_create(homeScreen);
+    lv_obj_set_size(timePanel, 400, 200);
+    lv_obj_align(timePanel, LV_ALIGN_TOP_MID, 0, 50);
+    lv_obj_set_style_bg_color(timePanel, lv_color_hex(0x222222), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(timePanel, LV_OPA_50, LV_PART_MAIN);
+    lv_obj_set_style_border_width(timePanel, 2, LV_PART_MAIN);
+    lv_obj_set_style_border_color(timePanel, lv_color_hex(0x0000FF), LV_PART_MAIN);
+    lv_obj_set_style_radius(timePanel, 10, LV_PART_MAIN);
+    
+    // Create time label with large font
+    timeLabel = lv_label_create(timePanel);
+    lv_obj_add_style(timeLabel, &timeStyle, 0);
+    lv_obj_set_style_text_font(timeLabel, &lv_font_montserrat_48, 0); // Use largest font
+    lv_label_set_text(timeLabel, "--:--:--");
+    lv_obj_align(timeLabel, LV_ALIGN_CENTER, 0, -20);
+    
+    // Date label
+    dateLabel = lv_label_create(timePanel);
+    lv_obj_add_style(dateLabel, &dateStyle, 0);
+    lv_obj_set_style_text_font(dateLabel, &lv_font_montserrat_24, 0);
+    lv_label_set_text(dateLabel, "--.--.----");
+    lv_obj_align(dateLabel, LV_ALIGN_BOTTOM_MID, 0, -20);
+    
+    // Create sensor panel
+    lv_obj_t* sensorPanel = lv_obj_create(homeScreen);
+    lv_obj_set_size(sensorPanel, 700, 120);
+    lv_obj_align(sensorPanel, LV_ALIGN_CENTER, 0, 100);
+    lv_obj_set_style_bg_color(sensorPanel, lv_color_hex(0x222222), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(sensorPanel, LV_OPA_50, LV_PART_MAIN);
+    lv_obj_set_style_border_width(sensorPanel, 2, LV_PART_MAIN);
+    lv_obj_set_style_border_color(sensorPanel, lv_color_hex(0x00FF00), LV_PART_MAIN);
+    lv_obj_set_style_radius(sensorPanel, 10, LV_PART_MAIN);
+    
+    // Create grid layout for sensors
+    static lv_coord_t col_dsc[] = {220, 220, 220, LV_GRID_TEMPLATE_LAST};
+    static lv_coord_t row_dsc[] = {60, 60, LV_GRID_TEMPLATE_LAST};
+    
+    lv_obj_set_grid_dsc_array(sensorPanel, col_dsc, row_dsc);
+    
+    // Create sensor labels with larger fonts
+    // Temperature
+    lv_obj_t* tempTitle = lv_label_create(sensorPanel);
+    lv_label_set_text(tempTitle, "Temperature");
+    lv_obj_set_grid_cell(tempTitle, LV_GRID_ALIGN_CENTER, 0, 1, LV_GRID_ALIGN_START, 0, 1);
+    
+    tempLabel = lv_label_create(sensorPanel);
+    lv_obj_set_style_text_font(tempLabel, &lv_font_montserrat_32, 0);
+    lv_label_set_text(tempLabel, "--°C");
+    lv_obj_set_grid_cell(tempLabel, LV_GRID_ALIGN_CENTER, 0, 1, LV_GRID_ALIGN_CENTER, 1, 1);
+    
+    // Humidity
+    lv_obj_t* humTitle = lv_label_create(sensorPanel);
+    lv_label_set_text(humTitle, "Humidity");
+    lv_obj_set_grid_cell(humTitle, LV_GRID_ALIGN_CENTER, 1, 1, LV_GRID_ALIGN_START, 0, 1);
+    
+    humidityLabel = lv_label_create(sensorPanel);
+    lv_obj_set_style_text_font(humidityLabel, &lv_font_montserrat_32, 0);
+    lv_label_set_text(humidityLabel, "--%");
+    lv_obj_set_grid_cell(humidityLabel, LV_GRID_ALIGN_CENTER, 1, 1, LV_GRID_ALIGN_CENTER, 1, 1);
+    
+    // CO2
+    lv_obj_t* co2Title = lv_label_create(sensorPanel);
+    lv_label_set_text(co2Title, "CO2");
+    lv_obj_set_grid_cell(co2Title, LV_GRID_ALIGN_CENTER, 2, 1, LV_GRID_ALIGN_START, 0, 1);
+    
+    eco2Label = lv_label_create(sensorPanel);
+    lv_obj_set_style_text_font(eco2Label, &lv_font_montserrat_32, 0);
+    lv_label_set_text(eco2Label, "--- ppm");
+    lv_obj_set_grid_cell(eco2Label, LV_GRID_ALIGN_CENTER, 2, 1, LV_GRID_ALIGN_CENTER, 1, 1);
+    
+    // TVOC label below the panels
+    tvocLabel = lv_label_create(homeScreen);
+    lv_obj_add_style(tvocLabel, &infoStyle, 0);
+    lv_label_set_text(tvocLabel, "TVOC: --- ppb");
+    lv_obj_align(tvocLabel, LV_ALIGN_BOTTOM_LEFT, 20, -20);
+    
+    // Create button panel at the bottom
+    lv_obj_t* buttonPanel = lv_obj_create(homeScreen);
+    lv_obj_set_size(buttonPanel, 700, 70);
+    lv_obj_align(buttonPanel, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_set_style_bg_color(buttonPanel, lv_color_hex(0x222222), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(buttonPanel, LV_OPA_50, LV_PART_MAIN);
+    lv_obj_set_style_border_width(buttonPanel, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(buttonPanel, 10, LV_PART_MAIN);
+    
+    // Create navigation buttons with improved styles
+    lv_obj_t* btnAlarm = lv_btn_create(buttonPanel);
+    lv_obj_add_style(btnAlarm, &buttonStyle, 0);
+    lv_obj_add_style(btnAlarm, &buttonPressedStyle, LV_STATE_PRESSED);
+    lv_obj_set_size(btnAlarm, 160, 50);
+    lv_obj_align(btnAlarm, LV_ALIGN_LEFT_MID, 30, 0);
+    
+    lv_obj_t* btnAlarmLabel = lv_label_create(btnAlarm);
+    lv_obj_set_style_text_font(btnAlarmLabel, &lv_font_montserrat_20, 0);
+    lv_label_set_text(btnAlarmLabel, "ALARM");
+    lv_obj_center(btnAlarmLabel);
+    
+    // Store button type in user data for the callback
+    static int alarmBtnType = 1; // Use 1 for Alarm
+    lv_obj_add_event_cb(btnAlarm, UIManager::nav_btn_clicked_cb, LV_EVENT_CLICKED, &alarmBtnType);
+    
+    lv_obj_t* btnRadio = lv_btn_create(buttonPanel);
+    lv_obj_add_style(btnRadio, &buttonStyle, 0);
+    lv_obj_add_style(btnRadio, &buttonPressedStyle, LV_STATE_PRESSED);
+    lv_obj_set_size(btnRadio, 160, 50);
+    lv_obj_align(btnRadio, LV_ALIGN_CENTER, 0, 0);
+    
+    lv_obj_t* btnRadioLabel = lv_label_create(btnRadio);
+    lv_obj_set_style_text_font(btnRadioLabel, &lv_font_montserrat_20, 0);
+    lv_label_set_text(btnRadioLabel, "RADIO");
+    lv_obj_center(btnRadioLabel);
+    
+    // Store button type in user data for the callback
+    static int radioBtnType = 2; // Use 2 for Radio
+    lv_obj_add_event_cb(btnRadio, UIManager::nav_btn_clicked_cb, LV_EVENT_CLICKED, &radioBtnType);
+    
+    lv_obj_t* btnSettings = lv_btn_create(buttonPanel);
+    lv_obj_add_style(btnSettings, &buttonStyle, 0);
+    lv_obj_add_style(btnSettings, &buttonPressedStyle, LV_STATE_PRESSED);
+    lv_obj_set_size(btnSettings, 160, 50);
+    lv_obj_align(btnSettings, LV_ALIGN_RIGHT_MID, -30, 0);
+    
+    lv_obj_t* btnSettingsLabel = lv_label_create(btnSettings);
+    lv_obj_set_style_text_font(btnSettingsLabel, &lv_font_montserrat_20, 0);
+    lv_label_set_text(btnSettingsLabel, "SETTINGS");
+    lv_obj_center(btnSettingsLabel);
+    
+    // Store button type in user data for the callback
+    static int settingsBtnType = 3; // Use 3 for Settings
+    lv_obj_add_event_cb(btnSettings, UIManager::nav_btn_clicked_cb, LV_EVENT_CLICKED, &settingsBtnType);
+    
+    // Add status bar at the top
+    lv_obj_t* statusBar = lv_obj_create(homeScreen);
+    lv_obj_set_size(statusBar, 800, 30);
+    lv_obj_align(statusBar, LV_ALIGN_TOP_LEFT, 0, 0);
+    lv_obj_set_style_bg_color(statusBar, lv_color_hex(0x333333), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(statusBar, LV_OPA_COVER, LV_PART_MAIN);
+    
+    lv_obj_t* statusLabel = lv_label_create(statusBar);
+    lv_obj_add_style(statusLabel, &infoStyle, 0);
+    lv_label_set_text(statusLabel, "Radio Alarm Clock");
+    lv_obj_align(statusLabel, LV_ALIGN_LEFT_MID, 10, 0);
+    
+    // Create a small alarm indicator in the status bar
+    nextAlarmLabel = lv_label_create(statusBar);
+    lv_obj_add_style(nextAlarmLabel, &infoStyle, 0);
+    lv_label_set_text(nextAlarmLabel, "No Alarms");
+    lv_obj_align(nextAlarmLabel, LV_ALIGN_RIGHT_MID, -10, 0);
+    
+    Serial.println("Home screen created successfully");
+    
+    // Force LVGL to update the screen immediately
+    lv_obj_invalidate(homeScreen);
+    lv_refr_now(lv_disp_get_default());
 }
 
 void UIManager::hideAlarmScreen() {
@@ -740,7 +854,61 @@ void UIManager::save_alarm_cb(lv_event_t* e) {
     if (ui->alarmCallback) {
         ui->alarmCallback(true, hour, minute, days);
     }
+}
+
+// Navigation button callback implementation
+void UIManager::nav_btn_clicked_cb(lv_event_t* e) {
+    Serial.println("****** NAVIGATION BUTTON CLICKED ******");
     
-    // Return to home screen
-    ui->showHomeScreen();
+    // Get event code to confirm if it's a clicked event
+    uint32_t event_code = lv_event_get_code(e);
+    Serial.printf("Event code: %d (LV_EVENT_CLICKED=%d)\n", event_code, LV_EVENT_CLICKED);
+    
+    // Get the button type from user_data
+    int* btnType = static_cast<int*>(lv_event_get_user_data(e));
+    if (!btnType) {
+        Serial.println("Error: Button type not found");
+        return;
+    }
+    
+    Serial.printf("Button type value: %d\n", *btnType);
+    
+    // Get target object info
+    lv_obj_t* btn = lv_event_get_target(e);
+    if (!btn) {
+        Serial.println("Error: Target button not found");
+        return;
+    }
+    
+    // Get button coordinates for debugging
+    lv_coord_t x = lv_obj_get_x(btn);
+    lv_coord_t y = lv_obj_get_y(btn);
+    lv_coord_t width = lv_obj_get_width(btn);
+    lv_coord_t height = lv_obj_get_height(btn);
+    Serial.printf("Button position: x=%d, y=%d, width=%d, height=%d\n", x, y, width, height);
+    
+    // Get the UIManager instance
+    UIManager& ui = UIManager::getInstance();
+    
+    // Handle the button click based on the button type
+    switch (*btnType) {
+        case 1: // Alarm button
+            Serial.println("Alarm button clicked - Showing alarm settings screen");
+            ui.showAlarmSettingsScreen();
+            break;
+        case 2: // Radio button
+            Serial.println("Radio button clicked - Showing radio screen");
+            ui.showRadioScreen();
+            break;
+        case 3: // Settings button
+            Serial.println("Settings button clicked - Showing settings screen");
+            ui.showSettingsScreen();
+            break;
+        default:
+            Serial.printf("Unknown button type: %d\n", *btnType);
+            break;
+    }
+    
+    // Force LVGL to process the event immediately
+    lv_task_handler();
 }

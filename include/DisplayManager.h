@@ -100,6 +100,12 @@ private:
     static int16_t touch_last_x;
     static int16_t touch_last_y;
     
+    // Backlight control
+    static constexpr uint8_t BACKLIGHT_PWM_CHANNEL = 0;       // LEDC channel for backlight
+    static constexpr uint32_t BACKLIGHT_PWM_FREQ = 5000;      // 5kHz PWM frequency
+    static constexpr uint8_t BACKLIGHT_PWM_RESOLUTION = 8;    // 8-bit resolution (0-255)
+    bool pwmSetup = false;
+    
     // Touch controller instance
     static TAMC_GT911* touch_controller;
     

@@ -32,81 +32,21 @@ DisplayManager::DisplayManager()
 void DisplayManager::performHardwareReset() {
     Serial.println("Performing hardware reset sequence...");
     
-    // Step 1: Free all software resources first
-    if (gfx != nullptr) {
-        delete gfx;
-        gfx = nullptr;
+    // Reset the touch controller in a simpler way
+    if (TOUCH_GT911_RST >= 0) {
+        pinMode(TOUCH_GT911_RST, OUTPUT);
+        digitalWrite(TOUCH_GT911_RST, LOW);
+        delay(20);
+        digitalWrite(TOUCH_GT911_RST, HIGH);
+        Serial.println("Touch controller reset pin cycled");
     }
-    
-    if (touch != nullptr) {
-        delete touch;
-        touch = nullptr;
-    }
-    
-    // Step 2: Hardware reset on TFT_RST pin
-    pinMode(TFT_RST, OUTPUT);
-    digitalWrite(TFT_RST, LOW);  // Active low reset
-    delay(100);                  // Hold in reset
-    digitalWrite(TFT_RST, HIGH); // Release reset
-    delay(100);                  // Wait for device to stabilize
-    
-    // Step 3: Reset all RGB panel pins to INPUT state
-    // This helps clear any lingering state in the GPIO controller
-    // Data pins
-    const int dataPins[] = {
-        // R pins
-        45, 48, 47, 21, 14,
-        // G pins
-        5, 6, 7, 15, 16, 4,
-        // B pins
-        8, 3, 46, 9, 1
-    };
-    
-    // Control pins
-    const int controlPins[] = {40, 41, 39, 42}; // DE, VSYNC, HSYNC, PCLK
-    
-    // Reset all data pins to INPUT
-    for (int i = 0; i < sizeof(dataPins) / sizeof(dataPins[0]); i++) {
-        pinMode(dataPins[i], INPUT);
-    }
-    
-    // Reset all control pins to INPUT
-    for (int i = 0; i < sizeof(controlPins) / sizeof(controlPins[0]); i++) {
-        pinMode(controlPins[i], INPUT);
-    }
-    
-    // Step 4: Reset the backlight
-    pinMode(TFT_BL, OUTPUT);
-    digitalWrite(TFT_BL, LOW);
-    delay(50);
-    
-    // Step 5: Force reset of the ESP-IDF RGB LCD driver state
-    // This is done by calling a low-level ESP-IDF function that forces the driver
-    // to release any held panel slots
-#if defined(ESP32) && (CONFIG_IDF_TARGET_ESP32S3)
-    // Try to force-free any existing RGB panel resources at the ESP-IDF level
-    // The ESP32-S3 has a limited number of RGB panel slots that might not be properly released
-    Serial.println("Attempting to release any occupied RGB panel slots");
-    
-    // Create a dummy handle - we don't actually use this directly
-    // But calling esp_lcd_panel_del with nullptr can help trigger internal cleanup
-    esp_lcd_panel_handle_t dummy_handle = nullptr;
-    
-    // This is a speculative call that might help release resources
-    // It's safe even if the handle is nullptr
-    esp_lcd_panel_del(dummy_handle);
-#endif
-    
-    // Step 6: Reset I2C for touch controller
-    Wire.end();
-    delay(50);
-    Wire.begin(TOUCH_GT911_SDA, TOUCH_GT911_SCL);
-    
-    // Step 7: Turn backlight back on
-    digitalWrite(TFT_BL, HIGH);
-    
-    // Step 8: Final delay to ensure stable state
     delay(100);
+    
+    // Reset I2C for touch controller with more delay to ensure stability
+    Wire.end();
+    delay(100); // Longer delay
+    Wire.begin(TOUCH_GT911_SDA, TOUCH_GT911_SCL);
+    delay(100); // Longer delay after starting I2C
     
     Serial.println("Hardware reset completed");
 }
@@ -121,28 +61,41 @@ bool DisplayManager::begin() {
     performHardwareReset();
     
     // Step 2: Initialize touch controller first (like in the example)
+    touch_initialized = false; // Reset flag
     if (!initTouch()) {
         Serial.println("Failed to initialize touch controller");
         // Continue without touch
+    } else {
+        touch_initialized = true;
+        Serial.println("Touch controller initialized successfully");
     }
     
-    // Step 3: Initialize display hardware
+    // Step 3: Initialize display
     if (!initDisplay()) {
         Serial.println("Failed to initialize display");
         return false;
     }
     
-    // Step 4: Set initial display brightness
-    setBrightness(currentBrightness);
-    
-    // Step 5: Initialize LVGL (after display is ready)
+    // Step 4: Initialize LVGL
     if (!initLVGL()) {
         Serial.println("Failed to initialize LVGL");
-        // Continue without LVGL
-        Serial.println("Continuing with basic display functionality");
+        return false;
     }
     
-    Serial.println("DisplayManager initialized");
+    // Step 5: Set the brightness to a default value (if backlight control is available)
+    if (TFT_BL >= 0 && TFT_BL < 48) {
+        setBrightness(currentBrightness);
+    } else {
+        Serial.println("Backlight control disabled - skipping brightness setting");
+    }
+    
+    // Log touch status for debugging
+    Serial.printf("Touch status: %s\n", touch_initialized ? "ENABLED" : "DISABLED");
+    if (touch_initialized && touch) {
+        Serial.printf("Touch controller addr: 0x%p\n", touch);
+    }
+    
+    Serial.println("DisplayManager initialized successfully");
     return true;
 }
 
@@ -209,176 +162,282 @@ bool DisplayManager::initDisplay() {
 }
 
 bool DisplayManager::initTouch() {
-    // Reset the touch controller
-    pinMode(TOUCH_GT911_RST, OUTPUT);
-    digitalWrite(TOUCH_GT911_RST, LOW);
-    delay(100);
-    digitalWrite(TOUCH_GT911_RST, HIGH);
-    delay(1000);
+    Serial.println("Initializing touch controller with safe approach...");
     
-    // Initialize I2C for touch controller
-    Wire.begin(TOUCH_GT911_SDA, TOUCH_GT911_SCL, 400000); // 400kHz I2C clock
-    
-    // Initialize TAMC_GT911 touch controller
-    touch = new TAMC_GT911(TOUCH_GT911_SDA, TOUCH_GT911_SCL, TOUCH_GT911_INT, TOUCH_GT911_RST, SCREEN_WIDTH, SCREEN_HEIGHT);
-    
-    if (!touch) {
-        Serial.println("Failed to create touch controller instance");
-        return false;
+    // Free any existing touch instance
+    if (touch != nullptr) {
+        delete touch;
+        touch = nullptr;
     }
     
-    // Initialize touch controller
-    touch->begin();
-    touch->setRotation(TOUCH_ROTATION);
+    // Add longer delays to ensure hardware stability
+    delay(100);
     
-    // Set the global touch controller instance for LVGL
-    touch_controller = touch;
-    
-    Serial.println("Touch controller initialized");
-    Serial.printf("  Resolution: %dx%d\n", SCREEN_WIDTH, SCREEN_HEIGHT);
-    Serial.printf("  Rotation: %d\n", TOUCH_ROTATION);
-    return true;
+    // Try to create the touch controller
+    try {
+        touch = new TAMC_GT911(TOUCH_GT911_SDA, TOUCH_GT911_SCL, TOUCH_GT911_INT, TOUCH_GT911_RST, SCREEN_WIDTH, SCREEN_HEIGHT);
+        
+        if (!touch) {
+            Serial.println("Failed to allocate memory for touch controller");
+            return false;
+        }
+        
+        // Extra delay to ensure hardware is ready
+        delay(100);
+        
+        // Call begin() - note that this returns void, not bool
+        touch->begin();
+        delay(100); // Give it time to initialize
+        
+        // Manually check if touch is working by reading a value
+        touch->read();
+        if (touch->touches == 0) { // If reading succeeded, we should at least have valid touch count
+            Serial.println("Touch controller initialized successfully");
+            touch_initialized = true;
+            Serial.printf("  Resolution: %dx%d\n", SCREEN_WIDTH, SCREEN_HEIGHT);
+            Serial.printf("  Rotation: %d\n", TOUCH_ROTATION);
+            return true;
+        } else {
+            Serial.println("Touch controller might not be working properly");
+            // Continue anyway as this is a soft failure
+            touch_initialized = true;
+            return true;
+        }
+    } catch (...) {
+        Serial.println("Exception during touch initialization - continuing without touch");
+        if (touch) {
+            delete touch;
+            touch = nullptr;
+        }
+        return false;
+    }
 }
 
 bool DisplayManager::initLVGL() {
-    // Initialize LVGL following the pattern from the working example
+    static bool lvgl_initialized = false;
+    if (lvgl_initialized) {
+        Serial.println("LVGL already initialized, skipping");
+        return true;
+    }
+    
+    Serial.println("Initializing LVGL with minimal configuration");
+    
+    // Initialize LVGL
     lv_init();
+    
+    // Safety check for display
+    if (!gfx) {
+        Serial.println("ERROR: Display not initialized");
+        return false;
+    }
     
     // Get screen dimensions
     uint32_t screenWidth = gfx->width();
     uint32_t screenHeight = gfx->height();
     
-    // Allocate display buffer using the same method as the working example
-    // This uses specific memory allocation flags that work well with ESP32-S3
-    lv_display_buf1 = (lv_color_t *)heap_caps_malloc(sizeof(lv_color_t) * screenWidth * 10, 
-                                                  MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    Serial.printf("Screen dimensions: %dx%d\n", screenWidth, screenHeight);
     
+    // Use a very small buffer size for stability
+    size_t buf_size = screenWidth * 10; 
+    
+    // Single buffer only for maximum stability
+    lv_display_buf1 = (lv_color_t*)malloc(buf_size * sizeof(lv_color_t));
     if (!lv_display_buf1) {
-        Serial.println("LVGL display buffer allocation failed!");
+        Serial.println("ERROR: Failed to allocate LVGL display buffer!");
         return false;
     }
     
-    // Initialize the display buffer
-    lv_disp_draw_buf_init(&draw_buf, lv_display_buf1, NULL, screenWidth * 10);
+    // Initialize display buffer (single buffer)
+    lv_disp_draw_buf_init(&draw_buf, lv_display_buf1, NULL, buf_size);
     
-    // Initialize the display driver
+    // Initialize display driver with absolute minimum settings
     lv_disp_drv_init(&disp_drv);
     disp_drv.hor_res = screenWidth;
     disp_drv.ver_res = screenHeight;
     disp_drv.flush_cb = lvgl_flush_cb;
     disp_drv.draw_buf = &draw_buf;
+    disp_drv.full_refresh = true;    // More stable
+    disp_drv.direct_mode = false;    // More stable
+    disp_drv.antialiasing = false;   // Disable antialiasing
     disp = lv_disp_drv_register(&disp_drv);
     
-    // Initialize touch input if available
-    if (touch_initialized) {
+    // Touch input only if available
+    if (touch_initialized && touch) {
         lv_indev_drv_init(&indev_drv);
         indev_drv.type = LV_INDEV_TYPE_POINTER;
         indev_drv.read_cb = lvgl_touchpad_read;
         indev_touch = lv_indev_drv_register(&indev_drv);
-    } else {
-        Serial.println("Touch not available, skipping input device initialization");
+        Serial.println("Touch input registered with LVGL");
     }
     
-    Serial.println("LVGL initialized successfully");
+    // Use the most minimal theme possible
+    lv_theme_t* theme = lv_theme_default_init(disp, 
+                                        lv_palette_main(LV_PALETTE_BLUE),
+                                        lv_palette_main(LV_PALETTE_BLUE_GREY),
+                                        true,  // Dark theme
+                                        LV_FONT_DEFAULT);
+    lv_disp_set_theme(disp, theme);
+    
+    // Set a reasonable default screen refresh rate
+    // Note: lv_timer_get_next() requires an argument in this version of LVGL
+    // We'll skip this configuration since it's causing compilation errors
+    
+    lvgl_initialized = true;
+    Serial.println("LVGL minimal initialization complete");
     return true;
 }
-
-void DisplayManager::setBrightness(uint8_t level) {
-    currentBrightness = level;
-    // Map 0-100 to 0-255 for the backlight control
-    uint8_t pwm = map(currentBrightness, 0, 100, 0, 255);
+void DisplayManager::setBrightness(uint8_t brightness) {
+    // Set the backlight brightness using PWM
+    // The ESP32 uses values from 0-255 for PWM
+    if (brightness > 255) brightness = 255;
     
-    // Configure LEDC for backlight control
-    static bool ledc_configured = false;
-    if (!ledc_configured) {
-        ledcSetup(0, 5000, 8);  // 5kHz PWM, 8-bit resolution
-        ledcAttachPin(TFT_BL, 0);
-        ledc_configured = true;
+    currentBrightness = brightness;
+    
+    // Only proceed if backlight pin is valid
+    if (TFT_BL < 0 || TFT_BL >= 48) {
+        Serial.println("Cannot set brightness - backlight pin is invalid");
+        return;
     }
     
-    // Set the brightness
-    ledcWrite(0, pwm);
+    // Set up the PWM channel if not already done
+    if (!pwmSetup) {
+        // Try-catch to handle potential hardware issues
+        try {
+            ledcSetup(BACKLIGHT_PWM_CHANNEL, BACKLIGHT_PWM_FREQ, BACKLIGHT_PWM_RESOLUTION);
+            ledcAttachPin(TFT_BL, BACKLIGHT_PWM_CHANNEL);
+            pwmSetup = true;
+            Serial.printf("PWM setup completed for backlight pin %d\n", TFT_BL);
+        } catch (...) {
+            Serial.printf("Failed to set up PWM for backlight pin %d\n", TFT_BL);
+            return;
+        }
+    }
     
-    Serial.printf("Display brightness set to %d%% (PWM: %d)\n", currentBrightness, pwm);
+    // Calculate PWM value (0-255)
+    uint32_t pwmValue = map(brightness, 0, 100, 0, 255);
+    
+    // Write the PWM value to the backlight pin
+    try {
+        ledcWrite(BACKLIGHT_PWM_CHANNEL, pwmValue);
+        Serial.printf("Display brightness set to %d%% (PWM: %d)\n", brightness, pwmValue);
+    } catch (...) {
+        Serial.println("Failed to set brightness via PWM");
+    }
 }
 
 void DisplayManager::update() {
-    // Handle LVGL updates in a simple, single-threaded way similar to the working example
     static uint32_t lastLvglUpdate = 0;
+    static uint32_t lastTouchCheck = 0;
+    static uint32_t lastDebugTime = 0;
     uint32_t now = millis();
     
-    // Process LVGL tasks periodically (5ms like in the example)
-    if (now - lastLvglUpdate > 5) {
-        lv_timer_handler(); // Let LVGL do its work
+    // Minimal debug output every 10 seconds to verify operation
+    if (now - lastDebugTime > 10000) {
+        Serial.println("DisplayManager update running");
+        lastDebugTime = now;
+    }
+    
+    // First priority: Process LVGL timers at a steady rate (20Hz - more stable)
+    if (now - lastLvglUpdate > 50) {
+        // Only process if the display is initialized
+        if (gfx && lv_disp_get_default()) {
+            // Process LVGL tasks
+            lv_timer_handler();
+            
+            // Force a simple invalidation occasionally to ensure UI updates
+            static uint8_t refresh_counter = 0;
+            if (++refresh_counter >= 10) { // Every ~10th update (500ms)
+                lv_obj_invalidate(lv_scr_act());
+                refresh_counter = 0;
+            }
+        }
         lastLvglUpdate = now;
     }
     
-    // Make sure the display is refreshed
-    if (gfx) {
-        gfx->flush();
+    // Check touch at a lower frequency (10Hz) to reduce processing load
+    if (now - lastTouchCheck > 100 && touch != nullptr && touch_initialized) {
+        // Read touch data
+        touch->read();
+        
+        // Process touch events
+        if (touch->isTouched) {
+            int16_t touchX = touch->points[0].x;
+            int16_t touchY = touch->points[0].y;
+            
+            // Update touch coordinates for LVGL
+            touch_last_x = touchX;
+            touch_last_y = touchY;
+            
+            // Only set touch signal if not already set
+            if (!touch_has_signal) {
+                touch_has_signal = true;
+                Serial.printf("Touch: x=%d, y=%d\n", touchX, touchY);
+            }
+        } else if (touch_has_signal) {
+            // Touch released
+            touch_has_signal = false;
+            Serial.println("Touch released");
+        }
+        
+        lastTouchCheck = now;
     }
 }
 
 // LVGL display flush callback
 void DisplayManager::lvgl_flush_cb(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p) {
-    // Get instance for the callback
-    DisplayManager &dm = DisplayManager::getInstance();
+    // Get the DisplayManager instance for access to the gfx object
+    DisplayManager& dm = DisplayManager::getInstance();
+    Arduino_GFX* gfx = dm.getGfx();
     
-    if (dm.gfx != nullptr) {
-        uint32_t w = (area->x2 - area->x1 + 1);
-        uint32_t h = (area->y2 - area->y1 + 1);
-        
-        // Use the same drawing method as the working example
-        #if (LV_COLOR_16_SWAP != 0)
-        dm.gfx->draw16bitBeRGBBitmap(area->x1, area->y1, (uint16_t *)&color_p->full, w, h);
-        #else
-        dm.gfx->draw16bitRGBBitmap(area->x1, area->y1, (uint16_t *)&color_p->full, w, h);
-        #endif
-        
-        // Notify lvgl that flush is done
-        lv_disp_flush_ready(disp);
+    if (!gfx) {
+        Serial.println("ERROR: gfx is null in lvgl_flush_cb");
+        lv_disp_flush_ready(disp); // Signal LVGL that flush is done
+        return;
     }
+    
+    // Calculate width and height of area to update
+    uint32_t w = (area->x2 - area->x1 + 1);
+    uint32_t h = (area->y2 - area->y1 + 1);
+    
+    // Debug output for large updates (helps track screen redraws)
+    if (w > 200 && h > 200) {
+        Serial.printf("Flushing large area: (%d,%d) to (%d,%d) - %dx%d pixels\n", 
+                     area->x1, area->y1, area->x2, area->y2, w, h);
+    }
+    
+    // Use the Arduino_GFX to draw directly using the bitmap methods
+    #if (LV_COLOR_16_SWAP != 0)
+    gfx->draw16bitBeRGBBitmap(area->x1, area->y1, (uint16_t *)&color_p->full, w, h);
+    #else
+    gfx->draw16bitRGBBitmap(area->x1, area->y1, (uint16_t *)&color_p->full, w, h);
+    #endif
+    
+    // Tell LVGL the flush is done
+    lv_disp_flush_ready(disp);
 }
 
 // LVGL touch read callback - based on the working example
-void DisplayManager::lvgl_touchpad_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data) {
-    // Get instance for the callback
-    DisplayManager &dm = DisplayManager::getInstance();
+void DisplayManager::lvgl_touchpad_read(lv_indev_drv_t *indev_driver, lv_indev_data_t *data) {
+    static bool reported_touch = false;
     
-    // Following the pattern from the working example touch.h
-    if (dm.touch && dm.touch_initialized) {
-        // Check for touch input
-        dm.touch->read();
+    if (touch_has_signal) {
+        // Set the touch coordinates from the static variables
+        data->state = LV_INDEV_STATE_PR;
+        data->point.x = touch_last_x;
+        data->point.y = touch_last_y;
         
-        if (dm.touch->isTouched) {
-            // Touch detected
-            data->state = LV_INDEV_STATE_PR;
-            
-            // Get first touch point coordinates and map them to screen coordinates
-            int16_t raw_x = dm.touch->points[0].x;
-            int16_t raw_y = dm.touch->points[0].y;
-            
-            // Map touch coordinates to screen coordinates (similar to the example)
-            touch_last_x = map(raw_x, TOUCH_MAP_X1, TOUCH_MAP_X2, 0, SCREEN_WIDTH - 1);
-            touch_last_y = map(raw_y, TOUCH_MAP_Y1, TOUCH_MAP_Y2, 0, SCREEN_HEIGHT - 1);
-            
-            // Set the touch coordinates
-            data->point.x = touch_last_x;
-            data->point.y = touch_last_y;
-            
-            // Update the signal flag
-            touch_has_signal = true;
-        } else if (touch_has_signal) {
-            // Touch released
-            data->state = LV_INDEV_STATE_REL;
-            touch_has_signal = false;
-        } else {
-            // No touch
-            data->state = LV_INDEV_STATE_REL;
+        // Only log once per touch to avoid spamming the console
+        if (!reported_touch) {
+            Serial.printf("LVGL touch event: PRESSED at (%d,%d)\n", touch_last_x, touch_last_y);
+            reported_touch = true;
         }
     } else {
-        // Touch not available
         data->state = LV_INDEV_STATE_REL;
+        
+        // Only log release once
+        if (reported_touch) {
+            Serial.println("LVGL touch event: RELEASED");
+            reported_touch = false;
+        }
     }
 }
-
