@@ -308,11 +308,52 @@ void UIManager::updateNextAlarm(uint8_t hour, uint8_t minute, bool enabled) {
     if (nextAlarmLabel) {
         char buf[32];
         if (enabled) {
-            snprintf(buf, sizeof(buf), "Alarm: %02d:%02d", hour, minute);
+            snprintf(buf, sizeof(buf), "Next: %02d:%02d", hour, minute);
         } else {
-            snprintf(buf, sizeof(buf), "Alarm: Off");
+            snprintf(buf, sizeof(buf), "No Alarms");
         }
         lv_label_set_text(nextAlarmLabel, buf);
+    }
+}
+
+void UIManager::updateWifiSsid(const char* ssid) {
+    if (wifiSsidLabel) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "WiFi: %s", ssid ? ssid : "---");
+        lv_label_set_text(wifiSsidLabel, buf);
+        
+        // Refresh the label
+        lv_obj_invalidate(wifiSsidLabel);
+    }
+}
+
+void UIManager::updateIpAddress(const char* ipAddress) {
+    if (ipAddressLabel) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "IP: %s", ipAddress ? ipAddress : "---");
+        lv_label_set_text(ipAddressLabel, buf);
+        
+        // Refresh the label
+        lv_obj_invalidate(ipAddressLabel);
+    }
+}
+
+void UIManager::updateWifiQuality(int quality) {
+    if (wifiQualityLabel) {
+        char buf[32];
+        
+        if (quality < 0) {
+            // Not connected
+            snprintf(buf, sizeof(buf), "Signal: ---");
+        } else {
+            // Connected - show percentage
+            snprintf(buf, sizeof(buf), "Signal: %d%%", quality);
+        }
+        
+        lv_label_set_text(wifiQualityLabel, buf);
+        
+        // Refresh the label
+        lv_obj_invalidate(wifiQualityLabel);
     }
 }
 
@@ -802,19 +843,30 @@ void UIManager::createHomeScreen() {
     static int settingsBtnType = 3; // Use 3 for Settings
     lv_obj_add_event_cb(btnSettings, UIManager::nav_btn_clicked_cb, LV_EVENT_CLICKED, &settingsBtnType);
     
-    // Add status bar at the top
+    // Add status bar at the top with WiFi information
     lv_obj_t* statusBar = lv_obj_create(homeScreen);
     lv_obj_set_size(statusBar, 800, 30);
     lv_obj_align(statusBar, LV_ALIGN_TOP_LEFT, 0, 0);
     lv_obj_set_style_bg_color(statusBar, lv_color_hex(0x333333), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(statusBar, LV_OPA_COVER, LV_PART_MAIN);
     
-    lv_obj_t* statusLabel = lv_label_create(statusBar);
-    lv_obj_add_style(statusLabel, &infoStyle, 0);
-    lv_label_set_text(statusLabel, "Radio Alarm Clock");
-    lv_obj_align(statusLabel, LV_ALIGN_LEFT_MID, 10, 0);
+    // WiFi SSID label (left)
+    wifiSsidLabel = lv_label_create(statusBar);
+    lv_obj_add_style(wifiSsidLabel, &infoStyle, 0);
+    lv_label_set_text(wifiSsidLabel, "WiFi: ---");
+    lv_obj_align(wifiSsidLabel, LV_ALIGN_LEFT_MID, 10, 0);
     
-    // Status bar without alarm indicator (moved to time panel)
+    // IP Address label (center)
+    ipAddressLabel = lv_label_create(statusBar);
+    lv_obj_add_style(ipAddressLabel, &infoStyle, 0);
+    lv_label_set_text(ipAddressLabel, "IP: ---");
+    lv_obj_align(ipAddressLabel, LV_ALIGN_CENTER, 0, 0);
+    
+    // WiFi Quality label (right)
+    wifiQualityLabel = lv_label_create(statusBar);
+    lv_obj_add_style(wifiQualityLabel, &infoStyle, 0);
+    lv_label_set_text(wifiQualityLabel, "Signal: ---");
+    lv_obj_align(wifiQualityLabel, LV_ALIGN_RIGHT_MID, -10, 0);
     
     Serial.println("Home screen created successfully");
     

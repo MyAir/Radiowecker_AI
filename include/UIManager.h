@@ -120,6 +120,24 @@ public:
      */
     void updateNextAlarm(uint8_t hour, uint8_t minute, bool enabled = true);
     
+    /**
+     * @brief Update the WiFi SSID display
+     * @param ssid WiFi network name
+     */
+    void updateWifiSsid(const char* ssid);
+    
+    /**
+     * @brief Update the IP address display
+     * @param ipAddress IP address as string
+     */
+    void updateIpAddress(const char* ipAddress);
+    
+    /**
+     * @brief Update the WiFi signal quality display
+     * @param quality Signal quality (0-100%)
+     */
+    void updateWifiQuality(int quality);
+    
     // Callback types
     typedef void (*AlarmCallback)(bool enabled, uint8_t hour, uint8_t minute, bool days[7]);
     typedef void (*VolumeCallback)(uint8_t volume);
@@ -167,6 +185,11 @@ private:
     lv_obj_t* currentAlarmScreen = nullptr;
     lv_obj_t* weatherIcon = nullptr;
     lv_obj_t* feelsLikeLabel = nullptr;
+    
+    // Status bar elements
+    lv_obj_t* wifiSsidLabel = nullptr;
+    lv_obj_t* ipAddressLabel = nullptr;
+    lv_obj_t* wifiQualityLabel = nullptr;
     
     // Callbacks
     AlarmCallback alarmCallback = nullptr;

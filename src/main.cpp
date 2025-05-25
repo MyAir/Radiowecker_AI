@@ -589,12 +589,57 @@ void web_server_init() {
 }
 
 void update_display_task(void *parameter) {
+    // Get UIManager instance
+    UIManager& ui = UIManager::getInstance();
+    
+    // Timing variables for WiFi status updates
+    uint32_t lastWifiStatusUpdate = 0;
+    const uint32_t WIFI_STATUS_UPDATE_INTERVAL = 5000; // Update every 5 seconds
+    
     while (1) {
+        uint32_t currentTime = millis();
+        
         // Update the display using the singleton instance
         DisplayManager::getInstance().update();
         
+        // Update WiFi status information periodically
+        if (currentTime - lastWifiStatusUpdate >= WIFI_STATUS_UPDATE_INTERVAL) {
+            // Update WiFi SSID
+            if (WiFi.status() == WL_CONNECTED) {
+                ui.updateWifiSsid(WiFi.SSID().c_str());
+                
+                // Update IP address
+                char ipAddress[16];
+                snprintf(ipAddress, sizeof(ipAddress), "%d.%d.%d.%d", 
+                    WiFi.localIP()[0], WiFi.localIP()[1], 
+                    WiFi.localIP()[2], WiFi.localIP()[3]);
+                ui.updateIpAddress(ipAddress);
+                
+                // Update WiFi signal quality (RSSI to percentage)
+                int rssi = WiFi.RSSI();
+                int quality = 0;
+                
+                if (rssi <= -100) {
+                    quality = 0;
+                } else if (rssi >= -50) {
+                    quality = 100;
+                } else {
+                    // Convert RSSI to percentage (RSSI range: -100 to -50)
+                    quality = 2 * (rssi + 100);
+                }
+                
+                ui.updateWifiQuality(quality);
+            } else {
+                // Not connected
+                ui.updateWifiSsid("Not Connected");
+                ui.updateIpAddress("---");
+                ui.updateWifiQuality(-1); // Negative value indicates not connected
+            }
+            
+            lastWifiStatusUpdate = currentTime;
+        }
+        
         // Small delay to allow other tasks to run
-        // No need for a long delay as we want smooth UI updates
         vTaskDelay(pdMS_TO_TICKS(1)); // 1ms delay for high refresh rate
     }
     vTaskDelete(NULL);
