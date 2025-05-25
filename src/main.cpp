@@ -332,8 +332,12 @@ void loop() {
         if (getLocalTime(&timeinfo)) {
             // Format time as HH:MM:SS
             strftime(timeStr, sizeof(timeStr), "%H:%M:%S", &timeinfo);
-            // Format date as Weekday, DD Month
-            strftime(dateStr, sizeof(dateStr), "%A, %d %B", &timeinfo);
+            // Create German weekday array
+            const char* germanWeekdays[] = {"Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"};
+            // Format date with German weekday and dd.mm.yyyy format
+            char formattedDate[32];
+            strftime(formattedDate, sizeof(formattedDate), "%d.%m.%Y", &timeinfo);
+            snprintf(dateStr, sizeof(dateStr), "%s %s", germanWeekdays[timeinfo.tm_wday], formattedDate);
             
             // Only update if the time or date has changed
             if (strcmp(timeStr, lastTimeStr) != 0) {

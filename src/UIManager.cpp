@@ -652,12 +652,18 @@ void UIManager::createHomeScreen() {
     lv_label_set_text(timeLabel, "--:--:--");
     lv_obj_align(timeLabel, LV_ALIGN_CENTER, 0, -20);
     
-    // Date label
+    // Date label (format will be "Weekday dd.mm.yyyy" with weekday in German)
     dateLabel = lv_label_create(timePanel);
     lv_obj_add_style(dateLabel, &dateStyle, 0);
     lv_obj_set_style_text_font(dateLabel, &lv_font_montserrat_24, 0);
     lv_label_set_text(dateLabel, "--.--.----");
-    lv_obj_align(dateLabel, LV_ALIGN_BOTTOM_MID, 0, -20);
+    lv_obj_align(dateLabel, LV_ALIGN_CENTER, 0, 30);
+    
+    // Next alarm label below the date
+    nextAlarmLabel = lv_label_create(timePanel);
+    lv_obj_add_style(nextAlarmLabel, &infoStyle, 0);
+    lv_label_set_text(nextAlarmLabel, "No Alarms");
+    lv_obj_align(nextAlarmLabel, LV_ALIGN_BOTTOM_MID, 0, -10);
     
     // Create sensor panel with better spacing
     lv_obj_t* sensorPanel = lv_obj_create(homeScreen);
@@ -808,11 +814,7 @@ void UIManager::createHomeScreen() {
     lv_label_set_text(statusLabel, "Radio Alarm Clock");
     lv_obj_align(statusLabel, LV_ALIGN_LEFT_MID, 10, 0);
     
-    // Create a small alarm indicator in the status bar
-    nextAlarmLabel = lv_label_create(statusBar);
-    lv_obj_add_style(nextAlarmLabel, &infoStyle, 0);
-    lv_label_set_text(nextAlarmLabel, "No Alarms");
-    lv_obj_align(nextAlarmLabel, LV_ALIGN_RIGHT_MID, -10, 0);
+    // Status bar without alarm indicator (moved to time panel)
     
     Serial.println("Home screen created successfully");
     
