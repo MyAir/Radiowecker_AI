@@ -21,27 +21,20 @@ bool UIManager::init() {
     // Get reference to DisplayManager
     DisplayManager& dm = DisplayManager::getInstance();
     
-    // We no longer try to initialize LVGL here to prevent conflicts
-    // The DisplayManager should have already handled this during its initialization
-    // LVGL integration is currently disabled to prevent Guru Meditation errors
-    
+    // The DisplayManager should have already handled LVGL initialization
     // We'll just assume the DisplayManager has been initialized already
-    // If not, nothing will be displayed but at least we won't crash
     
-    Serial.println("UIManager initialized without LVGL to prevent resource conflicts");
+    Serial.println("UIManager initializing UI elements");
     
-    // Since LVGL is disabled, we won't initialize the theme or create screens
-    // This is a temporary solution until we resolve the RGB panel resource management issues
+    // Enable LVGL UI initialization
+    initTheme();
+    createHomeScreen();
+    createAlarmSettingsScreen();
+    createRadioScreen();
+    createSettingsScreen();
+    showHomeScreen();
     
-    // In the future, we can re-enable these once the display is working properly
-    // initTheme();
-    // createHomeScreen();
-    // createAlarmSettingsScreen();
-    // createRadioScreen();
-    // createSettingsScreen();
-    // showHomeScreen();
-    
-    // For now, we'll just return success to allow the application to run
+    Serial.println("UIManager initialization complete");
     return true;
 }
 
