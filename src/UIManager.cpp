@@ -205,7 +205,26 @@ void UIManager::updateTVOC(uint16_t tvoc) {
         char buf[16];
         snprintf(buf, sizeof(buf), "%u ppb", tvoc);
         lv_label_set_text(tvocLabel, buf);
-        Serial.printf("[DEBUG] UIManager::updateTVOC(%u ppb)\n", tvoc);
+        
+        // Set color based on TVOC concentration
+        lv_color_t tvoc_color;
+        if (tvoc < 400) {
+            // Good - Green
+            tvoc_color = lv_color_hex(0x00FF00);
+        } else if (tvoc < 1200) {
+            // Moderate - Orange
+            tvoc_color = lv_color_hex(0xFF9A00);
+        } else if (tvoc < 4000) {
+            // Bad - Red
+            tvoc_color = lv_color_hex(0xFF0000);
+        } else {
+            // Very Bad - Dark Red
+            tvoc_color = lv_color_hex(0xAA0000);
+        }
+        
+        lv_obj_set_style_text_color(tvocLabel, tvoc_color, 0);
+        
+        Serial.printf("[DEBUG] UIManager::updateTVOC(%u ppb) - Color set based on threshold\n", tvoc);
         
         // Invalidate the label and its parent to ensure proper redraw
         lv_obj_invalidate(tvocLabel);
