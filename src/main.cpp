@@ -89,6 +89,7 @@ void check_alarms_task(void *parameter);
 #include "ConfigManager.h"
 #include "AudioManager.h"
 #include "AlarmManager.h"
+#include "WeatherService.h"
 
 // Task handles
 TaskHandle_t displayTaskHandle = NULL;
@@ -96,6 +97,7 @@ TaskHandle_t audioTaskHandle = NULL;
 TaskHandle_t lvglTaskHandle = nullptr;
 TaskHandle_t sensorsTaskHandle = NULL;
 TaskHandle_t alarmTaskHandle = NULL;
+TaskHandle_t weatherTaskHandle = NULL;
 
 Adafruit_SGP30 sgp;
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
@@ -119,6 +121,7 @@ void lvgl_tick(void *parameter);
 void update_display_task(void *parameter);
 void update_sensors_task(void *parameter);
 void check_alarms_task(void *parameter);
+void update_weather_task(void *parameter);
 
 // Alarm triggered callback
 void onAlarmTriggered(const Alarm& alarm) {
@@ -278,10 +281,23 @@ void setup() {
         &alarmTaskHandle      // Task handle - use the correct variable name
     );
     
+    // Create weather update task (after WiFi and time are initialized)
+    Serial.println("[DEBUG] Creating WeatherTask on core 1");
+    BaseType_t weatherTaskCreated = xTaskCreatePinnedToCore(
+        update_weather_task,  // Task function
+        "WeatherTask",       // Task name for debugging
+        8192,                // Stack size (in words) - larger for JSON parsing
+        NULL,                // Task parameters
+        1,                   // Task priority
+        &weatherTaskHandle,  // Task handle
+        1                    // Core to run the task on (core 1)
+    );
+    
     // Check if all tasks were created successfully
     if (displayTaskCreated != pdPASS || 
         sensorsTaskCreated != pdPASS || 
-        alarmsTaskCreated != pdPASS) {
+        alarmsTaskCreated != pdPASS ||
+        weatherTaskCreated != pdPASS) {
         
         Serial.println("Error: Failed to create one or more tasks!");
         while (1) { delay(1000); } // Halt if tasks can't be created
@@ -712,5 +728,32 @@ void check_alarms_task(void *parameter) {
         
         // Sleep for 1 second
         vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+void update_weather_task(void *parameter) {
+    // Get the WeatherService instance
+    WeatherService& weatherService = WeatherService::getInstance();
+    
+    // Initialize weather service
+    if (!weatherService.init()) {
+        Serial.println("[ERROR] Failed to initialize WeatherService. Weather data will not be available.");
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    // Force initial update
+    bool initialUpdateSuccess = weatherService.forceUpdate();
+    if (!initialUpdateSuccess) {
+        Serial.println("[WARNING] Initial weather update failed. Will retry later.");
+    }
+    
+    while (1) {
+        // Update weather data
+        weatherService.update();
+        
+        // Sleep for 5 minutes (300,000 ms)
+        // The WeatherService class will handle throttling of API calls
+        vTaskDelay(pdMS_TO_TICKS(300000));
     }
 }
