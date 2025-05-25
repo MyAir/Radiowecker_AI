@@ -49,10 +49,12 @@ struct RadioStation {
 };
 
 struct WeatherConfig {
-    String api_key;
-    String city_id;
-    String units;
-    uint16_t update_interval;
+    String appid;       // API key (renamed from api_key to match OpenWeatherMap)
+    float lat;          // Latitude
+    float lon;          // Longitude
+    String units;       // Units (metric, imperial)
+    String lang;        // Language code
+    uint16_t update_interval; // Update interval in minutes
 };
 
 struct SystemConfig {

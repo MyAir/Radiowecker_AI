@@ -121,6 +121,31 @@ public:
     void updateNextAlarm(uint8_t hour, uint8_t minute, bool enabled = true);
     
     /**
+     * @brief Update the current weather display
+     * @param temp Current temperature in °C
+     * @param feels_like Perceived temperature in °C
+     * @param description Weather description text
+     * @param iconCode Weather icon code from OpenWeatherMap
+     */
+    void updateCurrentWeather(float temp, float feels_like, const char* description, const char* iconCode);
+    
+    /**
+     * @brief Update the morning forecast display
+     * @param temp Temperature in °C
+     * @param pop Probability of precipitation (0-1)
+     * @param iconCode Weather icon code from OpenWeatherMap
+     */
+    void updateMorningForecast(float temp, float pop, const char* iconCode);
+    
+    /**
+     * @brief Update the afternoon forecast display
+     * @param temp Temperature in °C
+     * @param pop Probability of precipitation (0-1)
+     * @param iconCode Weather icon code from OpenWeatherMap
+     */
+    void updateAfternoonForecast(float temp, float pop, const char* iconCode);
+    
+    /**
      * @brief Update the WiFi SSID display
      * @param ssid WiFi network name
      */
@@ -183,8 +208,25 @@ private:
     lv_obj_t* eco2Label = nullptr;
     lv_obj_t* nextAlarmLabel = nullptr;
     lv_obj_t* currentAlarmScreen = nullptr;
-    lv_obj_t* weatherIcon = nullptr;
+    
+    // Weather panel elements
+    lv_obj_t* weatherPanel = nullptr;
+    lv_obj_t* currentWeatherTitle = nullptr;
+    lv_obj_t* currentTempLabel = nullptr;
     lv_obj_t* feelsLikeLabel = nullptr;
+    lv_obj_t* weatherDescLabel = nullptr;
+    lv_obj_t* weatherIcon = nullptr;
+    
+    // Forecast elements
+    lv_obj_t* forecastPanel = nullptr;
+    lv_obj_t* morningTitle = nullptr;
+    lv_obj_t* morningTempLabel = nullptr;
+    lv_obj_t* morningRainLabel = nullptr;
+    lv_obj_t* morningIcon = nullptr;
+    lv_obj_t* afternoonTitle = nullptr;
+    lv_obj_t* afternoonTempLabel = nullptr;
+    lv_obj_t* afternoonRainLabel = nullptr;
+    lv_obj_t* afternoonIcon = nullptr;
     
     // Status bar elements
     lv_obj_t* wifiSsidLabel = nullptr;
@@ -244,5 +286,4 @@ public:
     static void nav_btn_clicked_cb(lv_event_t* e);
 };
 
-// Initialize static member
-inline UIManager* UIManager::instance = nullptr;
+// Static member will be defined in the cpp file

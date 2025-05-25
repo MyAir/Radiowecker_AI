@@ -162,9 +162,11 @@ bool ConfigManager::saveConfigToSPIFFS() {
     
     // Weather
     JsonObject weather = doc.createNestedObject("weather");
-    weather["api_key"] = weatherConfig.api_key;
-    weather["city_id"] = weatherConfig.city_id;
+    weather["appid"] = weatherConfig.appid;
+    weather["lat"] = weatherConfig.lat;
+    weather["lon"] = weatherConfig.lon;
     weather["units"] = weatherConfig.units;
+    weather["lang"] = weatherConfig.lang;
     weather["update_interval"] = weatherConfig.update_interval;
     
     // System
@@ -306,9 +308,11 @@ bool ConfigManager::saveConfig() {
     
     // Weather
     JsonObject weather = doc.createNestedObject("weather");
-    weather["api_key"] = weatherConfig.api_key;
-    weather["city_id"] = weatherConfig.city_id;
+    weather["appid"] = weatherConfig.appid;
+    weather["lat"] = weatherConfig.lat;
+    weather["lon"] = weatherConfig.lon;
     weather["units"] = weatherConfig.units;
+    weather["lang"] = weatherConfig.lang;
     weather["update_interval"] = weatherConfig.update_interval;
     
     // System
@@ -409,9 +413,11 @@ bool ConfigManager::parseConfig(JsonDocument& doc) {
     }
     
     // Weather
-    weatherConfig.api_key = doc["weather"]["api_key"].as<String>();
-    weatherConfig.city_id = doc["weather"]["city_id"].as<String>();
+    weatherConfig.appid = doc["weather"]["appid"].as<String>();
+    weatherConfig.lat = doc["weather"]["lat"] | 0.0f;
+    weatherConfig.lon = doc["weather"]["lon"] | 0.0f;
     weatherConfig.units = doc["weather"]["units"].as<String>();
+    weatherConfig.lang = doc["weather"]["lang"].as<String>();
     weatherConfig.update_interval = doc["weather"]["update_interval"] | 30;
     
     // System
@@ -468,9 +474,11 @@ void ConfigManager::setDefaultConfig() {
     radioStations.push_back(defaultStation);
     
     // Weather
-    weatherConfig.api_key = "";
-    weatherConfig.city_id = "";
+    weatherConfig.appid = "";
+    weatherConfig.lat = 0.0f;
+    weatherConfig.lon = 0.0f;
     weatherConfig.units = "metric";
+    weatherConfig.lang = "de";
     weatherConfig.update_interval = 30;
     
     // System
