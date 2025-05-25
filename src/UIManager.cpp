@@ -171,7 +171,26 @@ void UIManager::updateTemperature(float temp) {
         char buf[16];
         snprintf(buf, sizeof(buf), "%.1f°C", temp);
         lv_label_set_text(tempLabel, buf);
-        Serial.printf("[DEBUG] UIManager::updateTemperature(%.1f°C)\n", temp);
+        
+        // Set color based on temperature range
+        lv_color_t temp_color;
+        if (temp < 16) {
+            // Too cold - Blue
+            temp_color = lv_color_hex(0x00AFFF); // Light blue for better visibility
+        } else if (temp <= 23) {
+            // Comfortable - Green
+            temp_color = lv_color_hex(0x00FF00);
+        } else if (temp <= 26) {
+            // Warm - Orange
+            temp_color = lv_color_hex(0xFF9A00);
+        } else {
+            // Too hot - Red
+            temp_color = lv_color_hex(0xFF0000);
+        }
+        
+        lv_obj_set_style_text_color(tempLabel, temp_color, 0);
+        
+        Serial.printf("[DEBUG] UIManager::updateTemperature(%.1f°C) - Color set based on threshold\n", temp);
         
         // Invalidate the label and its parent to ensure proper redraw
         lv_obj_invalidate(tempLabel);
