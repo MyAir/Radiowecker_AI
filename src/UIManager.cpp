@@ -188,7 +188,23 @@ void UIManager::updateHumidity(float humidity) {
         char buf[16];
         snprintf(buf, sizeof(buf), "%.0f%%", humidity);
         lv_label_set_text(humidityLabel, buf);
-        Serial.printf("[DEBUG] UIManager::updateHumidity(%.0f%%)\n", humidity);
+        
+        // Set color based on humidity level
+        lv_color_t humidity_color;
+        if (humidity < 40) {
+            // Too dry - Yellow
+            humidity_color = lv_color_hex(0xFFD700); // Gold yellow
+        } else if (humidity <= 60) {
+            // Optimal - Green
+            humidity_color = lv_color_hex(0x00FF00);
+        } else {
+            // Too humid - Blue
+            humidity_color = lv_color_hex(0x00AFFF); // Light blue, better visibility
+        }
+        
+        lv_obj_set_style_text_color(humidityLabel, humidity_color, 0);
+        
+        Serial.printf("[DEBUG] UIManager::updateHumidity(%.0f%%) - Color set based on threshold\n", humidity);
         
         // Invalidate the label and its parent to ensure proper redraw
         lv_obj_invalidate(humidityLabel);
