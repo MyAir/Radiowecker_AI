@@ -222,7 +222,23 @@ void UIManager::updateCO2(uint16_t eco2) {
         char buf[16];
         snprintf(buf, sizeof(buf), "%u ppm", eco2);
         lv_label_set_text(eco2Label, buf);
-        Serial.printf("[DEBUG] UIManager::updateCO2(%u ppm)\n", eco2);
+        
+        // Set color based on CO2 concentration
+        lv_color_t co2_color;
+        if (eco2 < 1000) {
+            // Good - Green
+            co2_color = lv_color_hex(0x00FF00);
+        } else if (eco2 <= 2000) {
+            // Warning - Orange
+            co2_color = lv_color_hex(0xFF9A00);
+        } else {
+            // Danger - Red
+            co2_color = lv_color_hex(0xFF0000);
+        }
+        
+        lv_obj_set_style_text_color(eco2Label, co2_color, 0);
+        
+        Serial.printf("[DEBUG] UIManager::updateCO2(%u ppm) - Color set based on threshold\n", eco2);
         
         // Invalidate the label and its parent to ensure proper redraw
         lv_obj_invalidate(eco2Label);
