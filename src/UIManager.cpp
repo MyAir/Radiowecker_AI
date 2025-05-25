@@ -591,8 +591,8 @@ void UIManager::createHomeScreen() {
     
     // Create sensor panel with better spacing
     lv_obj_t* sensorPanel = lv_obj_create(homeScreen);
-    lv_obj_set_size(sensorPanel, 750, 140);  // Slightly larger panel
-    lv_obj_align(sensorPanel, LV_ALIGN_CENTER, 0, 90);  // Move up slightly
+    lv_obj_set_size(sensorPanel, 750, 70);  // Reduce height to eliminate wasted space
+    lv_obj_align(sensorPanel, LV_ALIGN_CENTER, 0, 80);  // Adjust vertical position
     lv_obj_set_style_bg_color(sensorPanel, lv_color_hex(0x222222), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(sensorPanel, LV_OPA_70, LV_PART_MAIN);  // More opaque for better readability
     lv_obj_set_style_border_width(sensorPanel, 2, LV_PART_MAIN);
@@ -602,10 +602,10 @@ void UIManager::createHomeScreen() {
     
     // Create grid layout for all four sensor values in one row with adjusted widths
     static lv_coord_t col_dsc[] = {160, 160, 160, 160, LV_GRID_TEMPLATE_LAST};
-    static lv_coord_t row_dsc[] = {24, 30, LV_GRID_TEMPLATE_LAST};
+    static lv_coord_t row_dsc[] = {20, 25, LV_GRID_TEMPLATE_LAST}; // Reduced row heights
     
     lv_obj_set_grid_dsc_array(sensorPanel, col_dsc, row_dsc);
-    lv_obj_set_style_pad_all(sensorPanel, 8, LV_PART_MAIN);  // Reduce padding
+    lv_obj_set_style_pad_all(sensorPanel, 5, LV_PART_MAIN);  // Further reduce padding
     
     // Style for sensor titles
     static lv_style_t title_style;
