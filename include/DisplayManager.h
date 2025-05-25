@@ -112,6 +112,11 @@ private:
     // Current brightness (0-100)
     uint8_t currentBrightness;
     
+    // Time tracking variables
+    unsigned long lastLvglUpdate = 0;
+    unsigned long lastTouchCheck = 0;
+    unsigned long lastFullRefresh = 0;
+    
     // Touch controller methods
     bool readTouch(int16_t& x, int16_t& y);
     bool isTouched();

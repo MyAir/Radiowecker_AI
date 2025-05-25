@@ -310,40 +310,33 @@ void loop() {
     
     // Update time string once per second
     static unsigned long lastTimeUpdate = 0;
-    if (millis() - lastTimeUpdate >= 1000) {
-        lastTimeUpdate = millis();
+    unsigned long now = millis();
+    if (now - lastTimeUpdate >= 1000) {
+        lastTimeUpdate = now;
         
         // Get current time
-        time_t now;
         struct tm timeinfo;
-        time(&now);
-        localtime_r(&now, &timeinfo);
+        char timeStr[9];  // HH:MM:SS + null terminator
+        char dateStr[32];
         
-        // Format time as HH:MM
-        char timeStr[6];
-        strftime(timeStr, sizeof(timeStr), "%H:%M", &timeinfo);
-        
-        // Check if minute has changed
-        static int lastMinute = -1;
-        bool minuteChanged = (timeinfo.tm_min != lastMinute);
-        
-        if (minuteChanged) {
-            lastMinute = timeinfo.tm_min;
-            
-            // Format date (e.g., "Monday, January 01")
-            char dateStr[32];
-            strftime(dateStr, sizeof(dateStr), "%A, %B %d", &timeinfo);
-            
-            // Update UI with date/time
-            ui.updateTime(timeStr);
-            ui.updateDate(dateStr); // Add the missing date update
+        if (!getLocalTime(&timeinfo)) {
+            Serial.println("Failed to obtain time");
+            // Set default values if time can't be obtained
+            strcpy(timeStr, "--:--:--");
+            strcpy(dateStr, "No date");
         } else {
-            // Update just the time
-            ui.updateTime(timeStr);
+            // Format time as HH:MM:SS
+            strftime(timeStr, sizeof(timeStr), "%H:%M:%S", &timeinfo);
+            // Format date as Weekday, DD Month
+            strftime(dateStr, sizeof(dateStr), "%A, %d %B", &timeinfo);
         }
         
+        // Update the UI with current time and date
+        ui.updateTime(timeStr);
+        ui.updateDate(dateStr);
+        
         // Debug output
-        Serial.printf("Time updated: %s\n", timeStr);
+        Serial.printf("Time updated: %s %s\n", timeStr, dateStr);
     }
     
     // Small delay to prevent watchdog issues

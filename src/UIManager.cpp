@@ -60,9 +60,11 @@ void UIManager::updateTime(const char* timeStr) {
         lv_label_set_text(timeLabel, timeStr);
         Serial.printf("[DEBUG] UIManager::updateTime(%s)\n", timeStr);
         
-        // Just mark the object as needing a redraw
+        // Invalidate the label and its parent to ensure proper redraw
         lv_obj_invalidate(timeLabel);
-        // Let the DisplayManager handle the refresh timing
+        if (lv_obj_get_parent(timeLabel)) {
+            lv_obj_invalidate(lv_obj_get_parent(timeLabel));
+        }
     } else {
         Serial.println("[WARNING] timeLabel is null in updateTime");
     }
@@ -73,8 +75,11 @@ void UIManager::updateDate(const char* dateStr) {
         lv_label_set_text(dateLabel, dateStr);
         Serial.printf("[DEBUG] UIManager::updateDate(%s)\n", dateStr);
         
-        // Just mark the object as needing a redraw
+        // Invalidate the label and its parent to ensure proper redraw
         lv_obj_invalidate(dateLabel);
+        if (lv_obj_get_parent(dateLabel)) {
+            lv_obj_invalidate(lv_obj_get_parent(dateLabel));
+        }
     } else {
         Serial.println("[WARNING] dateLabel is null in updateDate");
     }
@@ -120,8 +125,11 @@ void UIManager::updateTemperature(float temp) {
         lv_label_set_text(tempLabel, buf);
         Serial.printf("[DEBUG] UIManager::updateTemperature(%.1f°C)\n", temp);
         
-        // Just mark the object as needing a redraw
+        // Invalidate the label and its parent to ensure proper redraw
         lv_obj_invalidate(tempLabel);
+        if (lv_obj_get_parent(tempLabel)) {
+            lv_obj_invalidate(lv_obj_get_parent(tempLabel));
+        }
     } else {
         Serial.println("[WARNING] tempLabel is null in updateTemperature");
     }
@@ -134,8 +142,11 @@ void UIManager::updateHumidity(float humidity) {
         lv_label_set_text(humidityLabel, buf);
         Serial.printf("[DEBUG] UIManager::updateHumidity(%.0f%%)\n", humidity);
         
-        // Just mark the object as needing a redraw
+        // Invalidate the label and its parent to ensure proper redraw
         lv_obj_invalidate(humidityLabel);
+        if (lv_obj_get_parent(humidityLabel)) {
+            lv_obj_invalidate(lv_obj_get_parent(humidityLabel));
+        }
     } else {
         Serial.println("[WARNING] humidityLabel is null in updateHumidity");
     }
@@ -148,8 +159,11 @@ void UIManager::updateTVOC(uint16_t tvoc) {
         lv_label_set_text(tvocLabel, buf);
         Serial.printf("[DEBUG] UIManager::updateTVOC(%u ppb)\n", tvoc);
         
-        // Just mark the object as needing a redraw
+        // Invalidate the label and its parent to ensure proper redraw
         lv_obj_invalidate(tvocLabel);
+        if (lv_obj_get_parent(tvocLabel)) {
+            lv_obj_invalidate(lv_obj_get_parent(tvocLabel));
+        }
     } else {
         Serial.println("[WARNING] tvocLabel is null in updateTVOC");
     }
@@ -162,8 +176,11 @@ void UIManager::updateCO2(uint16_t eco2) {
         lv_label_set_text(eco2Label, buf);
         Serial.printf("[DEBUG] UIManager::updateCO2(%u ppm)\n", eco2);
         
-        // Just mark the object as needing a redraw
+        // Invalidate the label and its parent to ensure proper redraw
         lv_obj_invalidate(eco2Label);
+        if (lv_obj_get_parent(eco2Label)) {
+            lv_obj_invalidate(lv_obj_get_parent(eco2Label));
+        }
     } else {
         Serial.println("[WARNING] eco2Label is null in updateCO2");
     }
@@ -524,58 +541,84 @@ void UIManager::createHomeScreen() {
     lv_label_set_text(dateLabel, "--.--.----");
     lv_obj_align(dateLabel, LV_ALIGN_BOTTOM_MID, 0, -20);
     
-    // Create sensor panel
+    // Create sensor panel with better spacing
     lv_obj_t* sensorPanel = lv_obj_create(homeScreen);
-    lv_obj_set_size(sensorPanel, 700, 120);
-    lv_obj_align(sensorPanel, LV_ALIGN_CENTER, 0, 100);
+    lv_obj_set_size(sensorPanel, 750, 140);  // Slightly larger panel
+    lv_obj_align(sensorPanel, LV_ALIGN_CENTER, 0, 90);  // Move up slightly
     lv_obj_set_style_bg_color(sensorPanel, lv_color_hex(0x222222), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(sensorPanel, LV_OPA_50, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(sensorPanel, LV_OPA_70, LV_PART_MAIN);  // More opaque for better readability
     lv_obj_set_style_border_width(sensorPanel, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(sensorPanel, lv_color_hex(0x00FF00), LV_PART_MAIN);
-    lv_obj_set_style_radius(sensorPanel, 10, LV_PART_MAIN);
+    lv_obj_set_style_border_color(sensorPanel, lv_color_hex(0x444444), LV_PART_MAIN);  // Darker border
+    lv_obj_set_style_radius(sensorPanel, 12, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(sensorPanel, 10, LV_PART_MAIN);  // Add padding inside panel
     
-    // Create grid layout for sensors
-    static lv_coord_t col_dsc[] = {220, 220, 220, LV_GRID_TEMPLATE_LAST};
-    static lv_coord_t row_dsc[] = {60, 60, LV_GRID_TEMPLATE_LAST};
+    // Create grid layout for sensors with better spacing
+    static lv_coord_t col_dsc[] = {240, 240, 240, LV_GRID_TEMPLATE_LAST};
+    static lv_coord_t row_dsc[] = {30, 60, LV_GRID_TEMPLATE_LAST};
     
     lv_obj_set_grid_dsc_array(sensorPanel, col_dsc, row_dsc);
     
-    // Create sensor labels with larger fonts
+    // Style for sensor titles
+    static lv_style_t title_style;
+    lv_style_init(&title_style);
+    lv_style_set_text_font(&title_style, &lv_font_montserrat_16);
+    lv_style_set_text_color(&title_style, lv_color_white());
+    
+    // Style for sensor values
+    static lv_style_t value_style;
+    lv_style_init(&value_style);
+    lv_style_set_text_font(&value_style, &lv_font_montserrat_32);
+    lv_style_set_text_color(&value_style, lv_color_hex(0x00FF00));
+    
     // Temperature
     lv_obj_t* tempTitle = lv_label_create(sensorPanel);
-    lv_label_set_text(tempTitle, "Temperature");
+    lv_obj_add_style(tempTitle, &title_style, 0);
+    lv_label_set_text(tempTitle, "TEMPERATURE");
     lv_obj_set_grid_cell(tempTitle, LV_GRID_ALIGN_CENTER, 0, 1, LV_GRID_ALIGN_START, 0, 1);
     
     tempLabel = lv_label_create(sensorPanel);
-    lv_obj_set_style_text_font(tempLabel, &lv_font_montserrat_32, 0);
+    lv_obj_add_style(tempLabel, &value_style, 0);
     lv_label_set_text(tempLabel, "--°C");
     lv_obj_set_grid_cell(tempLabel, LV_GRID_ALIGN_CENTER, 0, 1, LV_GRID_ALIGN_CENTER, 1, 1);
     
     // Humidity
     lv_obj_t* humTitle = lv_label_create(sensorPanel);
-    lv_label_set_text(humTitle, "Humidity");
+    lv_obj_add_style(humTitle, &title_style, 0);
+    lv_label_set_text(humTitle, "HUMIDITY");
     lv_obj_set_grid_cell(humTitle, LV_GRID_ALIGN_CENTER, 1, 1, LV_GRID_ALIGN_START, 0, 1);
     
     humidityLabel = lv_label_create(sensorPanel);
-    lv_obj_set_style_text_font(humidityLabel, &lv_font_montserrat_32, 0);
+    lv_obj_add_style(humidityLabel, &value_style, 0);
     lv_label_set_text(humidityLabel, "--%");
     lv_obj_set_grid_cell(humidityLabel, LV_GRID_ALIGN_CENTER, 1, 1, LV_GRID_ALIGN_CENTER, 1, 1);
     
     // CO2
     lv_obj_t* co2Title = lv_label_create(sensorPanel);
+    lv_obj_add_style(co2Title, &title_style, 0);
     lv_label_set_text(co2Title, "CO2");
     lv_obj_set_grid_cell(co2Title, LV_GRID_ALIGN_CENTER, 2, 1, LV_GRID_ALIGN_START, 0, 1);
     
     eco2Label = lv_label_create(sensorPanel);
-    lv_obj_set_style_text_font(eco2Label, &lv_font_montserrat_32, 0);
+    lv_obj_add_style(eco2Label, &value_style, 0);
     lv_label_set_text(eco2Label, "--- ppm");
     lv_obj_set_grid_cell(eco2Label, LV_GRID_ALIGN_CENTER, 2, 1, LV_GRID_ALIGN_CENTER, 1, 1);
     
-    // TVOC label below the panels
-    tvocLabel = lv_label_create(homeScreen);
-    lv_obj_add_style(tvocLabel, &infoStyle, 0);
+    // TVOC panel at the bottom right
+    lv_obj_t* tvocPanel = lv_obj_create(homeScreen);
+    lv_obj_set_size(tvocPanel, 200, 50);
+    lv_obj_align(tvocPanel, LV_ALIGN_BOTTOM_RIGHT, -20, -15);
+    lv_obj_set_style_bg_color(tvocPanel, lv_color_hex(0x333333), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(tvocPanel, LV_OPA_70, LV_PART_MAIN);
+    lv_obj_set_style_radius(tvocPanel, 8, LV_PART_MAIN);
+    lv_obj_set_style_border_width(tvocPanel, 1, LV_PART_MAIN);
+    lv_obj_set_style_border_color(tvocPanel, lv_color_hex(0x444444), LV_PART_MAIN);
+    
+    // TVOC label inside its own panel
+    tvocLabel = lv_label_create(tvocPanel);
+    lv_obj_center(tvocLabel);
+    lv_obj_set_style_text_font(tvocLabel, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(tvocLabel, lv_color_hex(0x00FF00), 0);
     lv_label_set_text(tvocLabel, "TVOC: --- ppb");
-    lv_obj_align(tvocLabel, LV_ALIGN_BOTTOM_LEFT, 20, -20);
     
     // Create button panel at the bottom
     lv_obj_t* buttonPanel = lv_obj_create(homeScreen);

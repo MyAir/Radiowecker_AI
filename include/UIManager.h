@@ -218,6 +218,7 @@ public:
     static void theme_switch_cb(lv_event_t* e);
     static void day_btn_clicked_cb(lv_event_t* e);
     static void save_alarm_cb(lv_event_t* e);
+    static void nav_btn_clicked_cb(lv_event_t* e);
 };
 
 // Initialize static member

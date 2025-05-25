@@ -326,30 +326,28 @@ void DisplayManager::setBrightness(uint8_t brightness) {
 }
 
 void DisplayManager::update() {
-    static uint32_t lastLvglUpdate = 0;
-    static uint32_t lastTouchCheck = 0;
-    static uint32_t lastDebugTime = 0;
+    // Process LVGL tasks with higher priority
+    lv_timer_handler();
+    
+    // Update display at 30Hz (33ms interval)
+    static uint32_t lastUpdate = 0;
+    static uint32_t lastFullRefresh = 0;
     uint32_t now = millis();
     
-    // Minimal debug output every 10 seconds to verify operation
-    if (now - lastDebugTime > 10000) {
-        Serial.println("DisplayManager update running");
-        lastDebugTime = now;
-    }
-    
-    // First priority: Process LVGL timers at a steady rate (20Hz - more stable)
-    if (now - lastLvglUpdate > 50) {
-        // Only process if the display is initialized
-        if (gfx && lv_disp_get_default()) {
-            // Process LVGL tasks
-            lv_timer_handler();
+    // Process LVGL tasks every 20ms (50Hz)
+    if (now - lastUpdate >= 20) {
+        lastUpdate = now;
+        
+        // Only do a full refresh every 2 seconds to reduce flickering
+        if (now - lastFullRefresh >= 2000) {
+            lastFullRefresh = now;
+            // Force a full display refresh
+            lv_refr_now(NULL);
             
-            // Force a simple invalidation occasionally to ensure UI updates
-            static uint8_t refresh_counter = 0;
-            if (++refresh_counter >= 10) { // Every ~10th update (500ms)
-                lv_obj_invalidate(lv_scr_act());
-                refresh_counter = 0;
-            }
+            // Debug: Print memory usage
+            Serial.printf("[Display] Memory usage - Free: %d, Min free: %d\n", 
+                         heap_caps_get_free_size(MALLOC_CAP_8BIT),
+                         heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
         }
         lastLvglUpdate = now;
     }
