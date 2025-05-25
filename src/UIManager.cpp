@@ -488,6 +488,56 @@ void UIManager::createHomeScreen() {
         lv_label_set_text(nextAlarmLabel, "Next alarm: None");
         lv_obj_align(nextAlarmLabel, LV_ALIGN_BOTTOM_RIGHT, -20, -20);
         
+        // Create bottom navigation buttons
+        lv_obj_t* btnAlarm = lv_btn_create(homeScreen);
+        lv_obj_add_style(btnAlarm, &buttonStyle, 0);
+        lv_obj_add_style(btnAlarm, &buttonPressedStyle, LV_STATE_PRESSED);
+        lv_obj_set_size(btnAlarm, 120, 50);
+        lv_obj_align(btnAlarm, LV_ALIGN_BOTTOM_MID, -130, -20);
+        lv_obj_t* btnAlarmLabel = lv_label_create(btnAlarm);
+        lv_label_set_text(btnAlarmLabel, "Alarm");
+        lv_obj_center(btnAlarmLabel);
+        lv_obj_add_event_cb(btnAlarm, [](lv_event_t* e) {
+            UIManager::getInstance().showAlarmSettingsScreen();
+        }, LV_EVENT_CLICKED, NULL);
+        
+        lv_obj_t* btnRadio = lv_btn_create(homeScreen);
+        lv_obj_add_style(btnRadio, &buttonStyle, 0);
+        lv_obj_add_style(btnRadio, &buttonPressedStyle, LV_STATE_PRESSED);
+        lv_obj_set_size(btnRadio, 120, 50);
+        lv_obj_align(btnRadio, LV_ALIGN_BOTTOM_MID, 0, -20);
+        lv_obj_t* btnRadioLabel = lv_label_create(btnRadio);
+        lv_label_set_text(btnRadioLabel, "Radio");
+        lv_obj_center(btnRadioLabel);
+        lv_obj_add_event_cb(btnRadio, [](lv_event_t* e) {
+            UIManager::getInstance().showRadioScreen();
+        }, LV_EVENT_CLICKED, NULL);
+        
+        lv_obj_t* btnSettings = lv_btn_create(homeScreen);
+        lv_obj_add_style(btnSettings, &buttonStyle, 0);
+        lv_obj_add_style(btnSettings, &buttonPressedStyle, LV_STATE_PRESSED);
+        lv_obj_set_size(btnSettings, 120, 50);
+        lv_obj_align(btnSettings, LV_ALIGN_BOTTOM_MID, 130, -20);
+        lv_obj_t* btnSettingsLabel = lv_label_create(btnSettings);
+        lv_label_set_text(btnSettingsLabel, "Settings");
+        lv_obj_center(btnSettingsLabel);
+        lv_obj_add_event_cb(btnSettings, [](lv_event_t* e) {
+            UIManager::getInstance().showSettingsScreen();
+        }, LV_EVENT_CLICKED, NULL);
+        
+        // Add status bar text
+        lv_obj_t* statusBar = lv_obj_create(homeScreen);
+        lv_obj_remove_style_all(statusBar);
+        lv_obj_set_size(statusBar, 800, 30);
+        lv_obj_align(statusBar, LV_ALIGN_TOP_LEFT, 0, 0);
+        lv_obj_set_style_bg_color(statusBar, lv_color_hex(0x333333), 0);
+        lv_obj_set_style_bg_opa(statusBar, LV_OPA_COVER, 0);
+        
+        lv_obj_t* statusLabel = lv_label_create(statusBar);
+        lv_obj_add_style(statusLabel, &infoStyle, 0);
+        lv_label_set_text(statusLabel, "Radio Alarm Clock");
+        lv_obj_align(statusLabel, LV_ALIGN_LEFT_MID, 10, 0);
+        
         // Load the home screen
         lv_scr_load(homeScreen);
     }

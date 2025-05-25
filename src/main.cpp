@@ -336,6 +336,7 @@ void loop() {
             
             // Update UI with date/time
             ui.updateTime(timeStr);
+            ui.updateDate(dateStr); // Add the missing date update
         } else {
             // Update just the time
             ui.updateTime(timeStr);
