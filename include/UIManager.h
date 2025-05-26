@@ -248,6 +248,9 @@ private:
     // Current theme
     bool darkTheme = true;
     
+    // Timer for settings screen timeout
+    lv_timer_t* settingsScreenTimer = nullptr;
+    
 public:
     // Public methods for callbacks
     void triggerAlarmCallback(bool enabled, uint8_t hour, uint8_t minute, bool* days) {

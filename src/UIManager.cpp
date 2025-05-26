@@ -589,6 +589,8 @@ void UIManager::createSettingsScreen() {
     
     // Back button
     lv_obj_t* backBtn = lv_btn_create(settingsScreen);
+    lv_obj_add_style(backBtn, &buttonStyle, 0);
+    lv_obj_add_style(backBtn, &buttonPressedStyle, LV_STATE_PRESSED);
     lv_obj_set_size(backBtn, 80, 40);
     lv_obj_align(backBtn, LV_ALIGN_TOP_LEFT, 10, 10);
     lv_obj_t* backLabel = lv_label_create(backBtn);
@@ -596,6 +598,43 @@ void UIManager::createSettingsScreen() {
     lv_obj_center(backLabel);
     // Use static member function as callback
     lv_obj_add_event_cb(backBtn, back_btn_clicked_cb, LV_EVENT_CLICKED, this);
+    
+    // Information label about timeout
+    lv_obj_t* timeoutLabel = lv_label_create(settingsScreen);
+    lv_obj_add_style(timeoutLabel, &infoStyle, 0);
+    lv_label_set_text(timeoutLabel, "Screen will automatically close after 10 seconds");
+    lv_obj_align(timeoutLabel, LV_ALIGN_TOP_MID, 0, 10);
+    
+    // Add buttons for alarm and radio features
+    lv_obj_t* btnAlarm = lv_btn_create(settingsScreen);
+    lv_obj_add_style(btnAlarm, &buttonStyle, 0);
+    lv_obj_add_style(btnAlarm, &buttonPressedStyle, LV_STATE_PRESSED);
+    lv_obj_set_size(btnAlarm, 200, 60);
+    lv_obj_align(btnAlarm, LV_ALIGN_CENTER, 0, -60);
+    
+    lv_obj_t* btnAlarmLabel = lv_label_create(btnAlarm);
+    lv_obj_set_style_text_font(btnAlarmLabel, &lv_font_montserrat_20, 0);
+    lv_label_set_text(btnAlarmLabel, "ALARM");
+    lv_obj_center(btnAlarmLabel);
+    
+    // Store button type in user data for the callback
+    static int alarmBtnType = 1; // Use 1 for Alarm
+    lv_obj_add_event_cb(btnAlarm, UIManager::nav_btn_clicked_cb, LV_EVENT_CLICKED, &alarmBtnType);
+    
+    lv_obj_t* btnRadio = lv_btn_create(settingsScreen);
+    lv_obj_add_style(btnRadio, &buttonStyle, 0);
+    lv_obj_add_style(btnRadio, &buttonPressedStyle, LV_STATE_PRESSED);
+    lv_obj_set_size(btnRadio, 200, 60);
+    lv_obj_align(btnRadio, LV_ALIGN_CENTER, 0, 30);
+    
+    lv_obj_t* btnRadioLabel = lv_label_create(btnRadio);
+    lv_obj_set_style_text_font(btnRadioLabel, &lv_font_montserrat_20, 0);
+    lv_label_set_text(btnRadioLabel, "RADIO");
+    lv_obj_center(btnRadioLabel);    
+    
+    // Store button type in user data for the callback
+    static int radioBtnType = 2; // Use 2 for Radio
+    lv_obj_add_event_cb(btnRadio, UIManager::nav_btn_clicked_cb, LV_EVENT_CLICKED, &radioBtnType);
 }
 
 // Static callback implementation
@@ -719,6 +758,21 @@ void UIManager::showRadioScreen() {
 void UIManager::showSettingsScreen() {
     if (!settingsScreen) {
         createSettingsScreen();
+    } else {
+        // If the screen already exists, reset the timer
+        if (settingsScreenTimer) {
+            lv_timer_reset(settingsScreenTimer);
+        } else {
+            // Create a new timer if needed
+            settingsScreenTimer = lv_timer_create([](lv_timer_t* timer) {
+                UIManager* ui = static_cast<UIManager*>(timer->user_data);
+                if (ui) {
+                    ui->showHomeScreen();
+                }
+                // Delete the timer after it fires
+                lv_timer_del(timer);
+            }, 10000, this);  // 10000ms = 10 seconds
+        }
     }
     showScreen(settingsScreen);
 }
@@ -831,11 +885,19 @@ void UIManager::createHomeScreen() {
     homeScreen = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(homeScreen, lv_color_black(), LV_PART_MAIN);
     lv_obj_set_size(homeScreen, 800, 480);
+    // Add click event to the entire home screen to show settings
+    lv_obj_add_event_cb(homeScreen, [](lv_event_t* e) {
+        UIManager* ui = static_cast<UIManager*>(lv_event_get_user_data(e));
+        if (!ui) return;
+        ui->showSettingsScreen();
+    }, LV_EVENT_CLICKED, this);
     
-    // Create a large panel for the time and date
+    // Create a large panel for the time and date - spans from below status bar to sensor box, horizontally to weather box
     lv_obj_t* timePanel = lv_obj_create(homeScreen);
-    lv_obj_set_size(timePanel, 400, 200);
-    lv_obj_align(timePanel, LV_ALIGN_TOP_MID, 0, 50);
+    // Calculate size: Width is screen width (800) minus weather panel width (200) minus margin (5)
+    // Height is from status bar (35px) to sensor box (position is 480-70-20 = 390px) minus margins
+    lv_obj_set_size(timePanel, 595, 345); // 800-200-5, 390-35-10
+    lv_obj_align(timePanel, LV_ALIGN_TOP_LEFT, 0, 35); // Position right below status bar
     lv_obj_set_style_bg_color(timePanel, lv_color_hex(0x222222), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(timePanel, LV_OPA_50, LV_PART_MAIN);
     lv_obj_set_style_border_width(timePanel, 2, LV_PART_MAIN);
@@ -862,10 +924,10 @@ void UIManager::createHomeScreen() {
     lv_label_set_text(nextAlarmLabel, "No Alarms");
     lv_obj_align(nextAlarmLabel, LV_ALIGN_BOTTOM_MID, 0, -10);
     
-    // Create sensor panel with better spacing
+    // Create sensor panel with better spacing - moved to bottom-left, 70% width
     lv_obj_t* sensorPanel = lv_obj_create(homeScreen);
-    lv_obj_set_size(sensorPanel, 750, 70);  // Reduce height to eliminate wasted space
-    lv_obj_align(sensorPanel, LV_ALIGN_CENTER, 0, 80);  // Adjust vertical position
+    lv_obj_set_size(sensorPanel, 560, 70);  // 70% of 800px width = 560px
+    lv_obj_align(sensorPanel, LV_ALIGN_BOTTOM_LEFT, 5, -20);  // Position at bottom-left with margin
     lv_obj_set_style_bg_color(sensorPanel, lv_color_hex(0x222222), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(sensorPanel, LV_OPA_70, LV_PART_MAIN);  // More opaque for better readability
     lv_obj_set_style_border_width(sensorPanel, 2, LV_PART_MAIN);
@@ -875,10 +937,10 @@ void UIManager::createHomeScreen() {
     
     // Create grid layout for all four sensor values in one row with adjusted widths
     
-    // Create weather panel to the right of the time panel
+    // Create weather panel - 25% width, full height from status bar to bottom
     weatherPanel = lv_obj_create(homeScreen);
-    lv_obj_set_size(weatherPanel, 350, 200);
-    lv_obj_align(weatherPanel, LV_ALIGN_TOP_RIGHT, -20, 50);
+    lv_obj_set_size(weatherPanel, 200, 445);  // 25% of 800px = 200px, height from status bar (35px) to bottom (480-5px margin)
+    lv_obj_align(weatherPanel, LV_ALIGN_TOP_RIGHT, -5, 35);  // Position at right side from status bar to bottom
     lv_obj_set_style_bg_color(weatherPanel, lv_color_hex(0x222222), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(weatherPanel, LV_OPA_60, LV_PART_MAIN);
     lv_obj_set_style_border_width(weatherPanel, 2, LV_PART_MAIN);
@@ -892,34 +954,34 @@ void UIManager::createHomeScreen() {
     lv_label_set_text(currentWeatherTitle, "Aktuelles Wetter");
     lv_obj_align(currentWeatherTitle, LV_ALIGN_TOP_MID, 0, 5);
     
-    // Weather icon - large emoji for now
+    // Weather icon - centered for narrow panel
     weatherIcon = lv_label_create(weatherPanel);
     lv_obj_set_style_text_font(weatherIcon, &lv_font_montserrat_48, 0);
     lv_label_set_text(weatherIcon, "🌤️");  // Default icon
-    lv_obj_align(weatherIcon, LV_ALIGN_TOP_LEFT, 10, 30);
+    lv_obj_align(weatherIcon, LV_ALIGN_TOP_MID, 0, 40);
     
     // Current temperature
     currentTempLabel = lv_label_create(weatherPanel);
     lv_obj_set_style_text_font(currentTempLabel, &lv_font_montserrat_32, 0);
     lv_label_set_text(currentTempLabel, "--°C");
-    lv_obj_align(currentTempLabel, LV_ALIGN_TOP_RIGHT, -10, 35);
+    lv_obj_align(currentTempLabel, LV_ALIGN_TOP_MID, 0, 95);
     
     // Feels like temperature
     feelsLikeLabel = lv_label_create(weatherPanel);
     lv_obj_add_style(feelsLikeLabel, &infoStyle, 0);
     lv_label_set_text(feelsLikeLabel, "Gefühlt: --°C");
-    lv_obj_align(feelsLikeLabel, LV_ALIGN_TOP_RIGHT, -10, 75);
+    lv_obj_align(feelsLikeLabel, LV_ALIGN_TOP_MID, 0, 135);
     
     // Weather description
     weatherDescLabel = lv_label_create(weatherPanel);
     lv_obj_add_style(weatherDescLabel, &infoStyle, 0);
     lv_label_set_text(weatherDescLabel, "Keine Daten");
-    lv_obj_align(weatherDescLabel, LV_ALIGN_TOP_LEFT, 10, 100);
+    lv_obj_align(weatherDescLabel, LV_ALIGN_TOP_MID, 0, 165);
     
-    // Create forecast panel below the weather panel
+    // Create forecast panel within the weather panel
     forecastPanel = lv_obj_create(weatherPanel);
-    lv_obj_set_size(forecastPanel, 330, 80);
-    lv_obj_align(forecastPanel, LV_ALIGN_BOTTOM_MID, 0, -5);
+    lv_obj_set_size(forecastPanel, 180, 180); // Taller panel for vertical layout
+    lv_obj_align(forecastPanel, LV_ALIGN_BOTTOM_MID, 0, -10);
     lv_obj_set_style_bg_color(forecastPanel, lv_color_hex(0x333333), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(forecastPanel, LV_OPA_50, LV_PART_MAIN);
     lv_obj_set_style_border_width(forecastPanel, 1, LV_PART_MAIN);
@@ -927,52 +989,54 @@ void UIManager::createHomeScreen() {
     lv_obj_set_style_radius(forecastPanel, 5, LV_PART_MAIN);
     lv_obj_set_style_pad_all(forecastPanel, 5, LV_PART_MAIN);
     
-    // Morning forecast (left side)
+    // Morning forecast - stacked vertically
     morningTitle = lv_label_create(forecastPanel);
     lv_obj_add_style(morningTitle, &infoStyle, 0);
     lv_label_set_text(morningTitle, "Vormittag");
-    lv_obj_align(morningTitle, LV_ALIGN_TOP_LEFT, 10, 5);
+    lv_obj_align(morningTitle, LV_ALIGN_TOP_MID, 0, 10);
     
     morningIcon = lv_label_create(forecastPanel);
-    lv_obj_set_style_text_font(morningIcon, &lv_font_montserrat_32, 0);
+    lv_obj_set_style_text_font(morningIcon, &lv_font_montserrat_20, 0); // Smaller font
     lv_label_set_text(morningIcon, "🌤️");
-    lv_obj_align(morningIcon, LV_ALIGN_TOP_LEFT, 10, 30);
+    lv_obj_align(morningIcon, LV_ALIGN_TOP_MID, 0, 35);
     
     morningTempLabel = lv_label_create(forecastPanel);
     lv_obj_add_style(morningTempLabel, &infoStyle, 0);
     lv_label_set_text(morningTempLabel, "--°C");
-    lv_obj_align(morningTempLabel, LV_ALIGN_TOP_LEFT, 50, 30);
+    lv_obj_align(morningTempLabel, LV_ALIGN_TOP_MID, 0, 60);
     
     morningRainLabel = lv_label_create(forecastPanel);
     lv_obj_add_style(morningRainLabel, &infoStyle, 0);
     lv_label_set_text(morningRainLabel, "☔ --%");
-    lv_obj_align(morningRainLabel, LV_ALIGN_TOP_LEFT, 50, 55);
+    lv_obj_align(morningRainLabel, LV_ALIGN_TOP_MID, 0, 80);
     
-    // Afternoon forecast (right side)
+    // Afternoon forecast - stacked vertically
     afternoonTitle = lv_label_create(forecastPanel);
     lv_obj_add_style(afternoonTitle, &infoStyle, 0);
     lv_label_set_text(afternoonTitle, "Nachmittag");
-    lv_obj_align(afternoonTitle, LV_ALIGN_TOP_RIGHT, -10, 5);
+    lv_obj_align(afternoonTitle, LV_ALIGN_TOP_MID, 0, 110);
     
     afternoonIcon = lv_label_create(forecastPanel);
-    lv_obj_set_style_text_font(afternoonIcon, &lv_font_montserrat_32, 0);
+    lv_obj_set_style_text_font(afternoonIcon, &lv_font_montserrat_20, 0); // Smaller font
     lv_label_set_text(afternoonIcon, "🌤️");
-    lv_obj_align(afternoonIcon, LV_ALIGN_TOP_RIGHT, -50, 30);
+    lv_obj_align(afternoonIcon, LV_ALIGN_TOP_MID, 0, 135);
     
     afternoonTempLabel = lv_label_create(forecastPanel);
     lv_obj_add_style(afternoonTempLabel, &infoStyle, 0);
     lv_label_set_text(afternoonTempLabel, "--°C");
-    lv_obj_align(afternoonTempLabel, LV_ALIGN_TOP_RIGHT, -10, 30);
+    lv_obj_align(afternoonTempLabel, LV_ALIGN_TOP_MID, 0, 160);
     
     afternoonRainLabel = lv_label_create(forecastPanel);
     lv_obj_add_style(afternoonRainLabel, &infoStyle, 0);
     lv_label_set_text(afternoonRainLabel, "☔ --%");
-    lv_obj_align(afternoonRainLabel, LV_ALIGN_TOP_RIGHT, -10, 55);
-    static lv_coord_t col_dsc[] = {160, 160, 160, 160, LV_GRID_TEMPLATE_LAST};
-    static lv_coord_t row_dsc[] = {20, 25, LV_GRID_TEMPLATE_LAST}; // Reduced row heights
+    lv_obj_align(afternoonRainLabel, LV_ALIGN_BOTTOM_MID, 0, -5);
+    static lv_coord_t col_dsc[] = {130, 130, 130, 130, LV_GRID_TEMPLATE_LAST}; // Narrower columns
+    static lv_coord_t row_dsc[] = {16, 23, LV_GRID_TEMPLATE_LAST}; // Even more reduced row heights
     
     lv_obj_set_grid_dsc_array(sensorPanel, col_dsc, row_dsc);
-    lv_obj_set_style_pad_all(sensorPanel, 5, LV_PART_MAIN);  // Further reduce padding
+    lv_obj_set_style_pad_all(sensorPanel, 5, LV_PART_MAIN);  // Keep reduced padding
+    lv_obj_set_style_pad_column(sensorPanel, 8, LV_PART_MAIN); // Adjust column spacing
+    lv_obj_set_style_pad_row(sensorPanel, 2, LV_PART_MAIN); // Minimal row spacing
     
     // Style for sensor titles
     static lv_style_t title_style;
@@ -1038,60 +1102,7 @@ void UIManager::createHomeScreen() {
     lv_obj_set_style_text_align(tvocLabel, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_grid_cell(tvocLabel, LV_GRID_ALIGN_STRETCH, 3, 1, LV_GRID_ALIGN_CENTER, 1, 1);
     
-    // Create button panel at the bottom
-    lv_obj_t* buttonPanel = lv_obj_create(homeScreen);
-    lv_obj_set_size(buttonPanel, 700, 70);
-    lv_obj_align(buttonPanel, LV_ALIGN_BOTTOM_MID, 0, -10);
-    lv_obj_set_style_bg_color(buttonPanel, lv_color_hex(0x222222), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(buttonPanel, LV_OPA_50, LV_PART_MAIN);
-    lv_obj_set_style_border_width(buttonPanel, 0, LV_PART_MAIN);
-    lv_obj_set_style_radius(buttonPanel, 10, LV_PART_MAIN);
-    
-    // Create navigation buttons with improved styles
-    lv_obj_t* btnAlarm = lv_btn_create(buttonPanel);
-    lv_obj_add_style(btnAlarm, &buttonStyle, 0);
-    lv_obj_add_style(btnAlarm, &buttonPressedStyle, LV_STATE_PRESSED);
-    lv_obj_set_size(btnAlarm, 160, 50);
-    lv_obj_align(btnAlarm, LV_ALIGN_LEFT_MID, 30, 0);
-    
-    lv_obj_t* btnAlarmLabel = lv_label_create(btnAlarm);
-    lv_obj_set_style_text_font(btnAlarmLabel, &lv_font_montserrat_20, 0);
-    lv_label_set_text(btnAlarmLabel, "ALARM");
-    lv_obj_center(btnAlarmLabel);
-    
-    // Store button type in user data for the callback
-    static int alarmBtnType = 1; // Use 1 for Alarm
-    lv_obj_add_event_cb(btnAlarm, UIManager::nav_btn_clicked_cb, LV_EVENT_CLICKED, &alarmBtnType);
-    
-    lv_obj_t* btnRadio = lv_btn_create(buttonPanel);
-    lv_obj_add_style(btnRadio, &buttonStyle, 0);
-    lv_obj_add_style(btnRadio, &buttonPressedStyle, LV_STATE_PRESSED);
-    lv_obj_set_size(btnRadio, 160, 50);
-    lv_obj_align(btnRadio, LV_ALIGN_CENTER, 0, 0);
-    
-    lv_obj_t* btnRadioLabel = lv_label_create(btnRadio);
-    lv_obj_set_style_text_font(btnRadioLabel, &lv_font_montserrat_20, 0);
-    lv_label_set_text(btnRadioLabel, "RADIO");
-    lv_obj_center(btnRadioLabel);
-    
-    // Store button type in user data for the callback
-    static int radioBtnType = 2; // Use 2 for Radio
-    lv_obj_add_event_cb(btnRadio, UIManager::nav_btn_clicked_cb, LV_EVENT_CLICKED, &radioBtnType);
-    
-    lv_obj_t* btnSettings = lv_btn_create(buttonPanel);
-    lv_obj_add_style(btnSettings, &buttonStyle, 0);
-    lv_obj_add_style(btnSettings, &buttonPressedStyle, LV_STATE_PRESSED);
-    lv_obj_set_size(btnSettings, 160, 50);
-    lv_obj_align(btnSettings, LV_ALIGN_RIGHT_MID, -30, 0);
-    
-    lv_obj_t* btnSettingsLabel = lv_label_create(btnSettings);
-    lv_obj_set_style_text_font(btnSettingsLabel, &lv_font_montserrat_20, 0);
-    lv_label_set_text(btnSettingsLabel, "SETTINGS");
-    lv_obj_center(btnSettingsLabel);
-    
-    // Store button type in user data for the callback
-    static int settingsBtnType = 3; // Use 3 for Settings
-    lv_obj_add_event_cb(btnSettings, UIManager::nav_btn_clicked_cb, LV_EVENT_CLICKED, &settingsBtnType);
+    // Navigation buttons removed - entire home screen is now touchable
     
     // Add status bar at the top with WiFi information
     lv_obj_t* statusBar = lv_obj_create(homeScreen);
