@@ -90,9 +90,8 @@ void UIManager::updateTime(const char* timeStr) {
     // Update the label text
     lv_label_set_text(timeLabel, timeStr);
     
-    // Force an immediate update of the display
+    // Just invalidate the time label, let LVGL handle the refresh
     lv_obj_invalidate(timeLabel);
-    lv_refr_now(lv_disp_get_default());
 }
 
 void UIManager::updateDate(const char* dateStr) {
