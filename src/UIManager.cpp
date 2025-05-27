@@ -90,9 +90,17 @@ void UIManager::updateTime(const char* timeStr) {
     // Update the label text
     lv_label_set_text(timeLabel, timeStr);
     
-    // Invalidate the time label and trigger a refresh, but don't force a full screen redraw
+    // Invalidate the time label
     lv_obj_invalidate(timeLabel);
-    lv_refr_now(NULL); // Use NULL instead of lv_disp_get_default() to avoid full screen refresh
+    
+    // Always do a refresh to ensure updates work properly
+    // This is more reliable, though it may have minimal flicker
+    lv_refr_now(lv_disp_get_default());
+    
+    // Update debug tracking
+    if (now - lastUpdate >= 1000) {
+        lastUpdate = now;
+    }
 }
 
 void UIManager::updateDate(const char* dateStr) {
@@ -111,11 +119,12 @@ void UIManager::updateDate(const char* dateStr) {
     strncpy(cleanDateStr, dateStr, sizeof(cleanDateStr) - 1);
     cleanDateStr[sizeof(cleanDateStr) - 1] = '\0'; // Ensure null termination
     
-    // Just update the label text - no forced refresh needed
+    // Update the label text
     lv_label_set_text(dateLabel, cleanDateStr);
     
-    // Simply invalidate the label - let LVGL handle the refresh
+    // Invalidate the date label and refresh
     lv_obj_invalidate(dateLabel);
+    lv_refr_now(lv_disp_get_default());
 }
 
 void UIManager::showMessage(const char* title, const char* message) {
@@ -1389,6 +1398,6 @@ void UIManager::nav_btn_clicked_cb(lv_event_t* e) {
             break;
     }
     
-    // Force LVGL to process the event immediately
-    lv_task_handler();
+    // Process LVGL timers to handle the UI update
+    lv_timer_handler();
 }
