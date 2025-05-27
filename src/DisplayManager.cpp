@@ -1,7 +1,11 @@
 #include "DisplayManager.h"
+#include "UIManager.h"
 #include <Arduino.h>
 #include <SPI.h>
 #include <Wire.h>
+
+// Forward declaration of UIManager class
+class UIManager;
 
 // Include ESP-IDF headers for low-level panel management
 #if defined(ESP32) && (CONFIG_IDF_TARGET_ESP32S3)
@@ -301,6 +305,7 @@ bool DisplayManager::initLVGL() {
     Serial.println("LVGL minimal initialization complete");
     return true;
 }
+
 void DisplayManager::setBrightness(uint8_t brightness) {
     // Set the backlight brightness using PWM
     // The ESP32 uses values from 0-255 for PWM
@@ -341,50 +346,66 @@ void DisplayManager::setBrightness(uint8_t brightness) {
 }
 
 void DisplayManager::update() {
+    // Process touch events if touch is initialized
+    if (touch_initialized && touch) {
+        static bool lastTouchState = false;
+        static uint32_t touchStartTime = 0;
+        static uint32_t touchEndTime = 0;
+        
+        // Check if enough time has passed since last touch check to avoid too frequent polling
+        uint32_t now = millis();
+        if (now - lastTouchCheck > 20) { // 50Hz touch polling
+            lastTouchCheck = now;
+            
+            // Get current touch state
+            bool currentTouchState = isTouched();
+            
+            // Process touch state changes
+            if (currentTouchState != lastTouchState) {
+                if (currentTouchState) {
+                    // Touch started
+                    touchStartTime = now;
+                    Serial.printf("Touch started at X:%d Y:%d\n", touch_last_x, touch_last_y);
+                    
+                    // Update the global lastTouchTime to track user interaction for screen timeout
+                    extern unsigned long lastTouchTime;
+                    lastTouchTime = now;
+                } else {
+                    // Touch ended
+                    touchEndTime = now;
+                    uint32_t touchDuration = touchEndTime - touchStartTime;
+                    
+                    // Detect tap (short touch duration)
+                    if (touchDuration < 300) {
+                        Serial.printf("Tap detected at X:%d Y:%d (duration: %d ms)\n", touch_last_x, touch_last_y, touchDuration);
+                    }
+                }
+                
+                // Update last touch state
+                lastTouchState = currentTouchState;
+            }
+        }
+    }
+    
+    // Print memory usage every 30 seconds
     static uint32_t lastMemoryPrint = 0;
     uint32_t now = millis();
-    
-    // Process LVGL tasks - this will handle all pending screen updates
-    // Call this as frequently as possible for smooth UI
-    lv_timer_handler();
-    
-    // Debug: Print memory usage every 30 seconds
     if (now - lastMemoryPrint >= 30000) {
+        Serial.printf("Free heap: %u bytes\n", ESP.getFreeHeap());
         lastMemoryPrint = now;
-        Serial.printf("[Display] Memory - Free: %d, Min free: %d\n",
-                     heap_caps_get_free_size(MALLOC_CAP_8BIT),
-                     heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
     }
     
-    lastLvglUpdate = now;
-    
-    // Check touch at a lower frequency (10Hz) to reduce processing load
-    if (now - lastTouchCheck > 100 && touch != nullptr && touch_initialized) {
-        // Read touch data
-        touch->read();
-        
-        // Process touch events
-        if (touch->isTouched) {
-            int16_t touchX = touch->points[0].x;
-            int16_t touchY = touch->points[0].y;
-            
-            // Update touch coordinates for LVGL
-            touch_last_x = touchX;
-            touch_last_y = touchY;
-            
-            // Only set touch signal if not already set
-            if (!touch_has_signal) {
-                touch_has_signal = true;
-                Serial.printf("Touch: x=%d, y=%d\n", touchX, touchY);
-            }
-        } else if (touch_has_signal) {
-            // Touch released
-            touch_has_signal = false;
-            Serial.println("Touch released");
-        }
-        
-        lastTouchCheck = now;
+    // Call LVGL task handler once at the end of the update
+    lv_task_handler();
+}
+
+bool DisplayManager::isTouched() {
+    if (!touch || !touch_initialized) {
+        return false;
     }
+    
+    // Use the GT911 touch controller's touches property
+    return touch->touches > 0;
 }
 
 // LVGL display flush callback
@@ -420,10 +441,11 @@ void DisplayManager::lvgl_flush_cb(lv_disp_drv_t *disp, const lv_area_t *area, l
     lv_disp_flush_ready(disp);
 }
 
-// LVGL touch read callback - based on the working example
+// LVGL touch read callback - simplified for reliability
 void DisplayManager::lvgl_touchpad_read(lv_indev_drv_t *indev_driver, lv_indev_data_t *data) {
     static bool reported_touch = false;
     
+    // Check if touch is active
     if (touch_has_signal) {
         // Set the touch coordinates from the static variables
         data->state = LV_INDEV_STATE_PR;
@@ -436,6 +458,7 @@ void DisplayManager::lvgl_touchpad_read(lv_indev_drv_t *indev_driver, lv_indev_d
             reported_touch = true;
         }
     } else {
+        // Touch released
         data->state = LV_INDEV_STATE_REL;
         
         // Only log release once

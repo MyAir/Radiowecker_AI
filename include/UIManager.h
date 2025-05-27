@@ -180,8 +180,16 @@ public:
     void showRadioScreen();
     void showSettingsScreen();
     
-private:
+    // LVGL screen objects - made public for direct access from lambda functions
+    lv_obj_t* homeScreen = nullptr;
+    lv_obj_t* alarmSettingsScreen = nullptr;
+    lv_obj_t* radioScreen = nullptr;
+    lv_obj_t* settingsScreen = nullptr;
+    lv_obj_t* settingsBackArea = nullptr; // Transparent back area at the top of settings screen
+    lv_obj_t* alarmScreen = nullptr;
+    lv_obj_t* currentScreen = nullptr; // Currently active screen
     
+private:
     // Theme
     void initTheme();
     
@@ -191,22 +199,18 @@ private:
     void createRadioScreen();
     void createSettingsScreen();
     
-    // UI elements
-    lv_obj_t* homeScreen = nullptr;
-    lv_obj_t* alarmSettingsScreen = nullptr;
-    lv_obj_t* radioScreen = nullptr;
-    lv_obj_t* settingsScreen = nullptr;
-    lv_obj_t* alarmScreen = nullptr;
-    lv_obj_t* currentScreen = nullptr; // Currently active screen
-    
     // Home screen elements
     lv_obj_t* timeLabel = nullptr;
     lv_obj_t* dateLabel = nullptr;
+    lv_obj_t* nextAlarmLabel = nullptr;
+    lv_obj_t* wifiLabel = nullptr;
+    lv_obj_t* ipLabel = nullptr;
+    lv_obj_t* wifiSsidLabel = nullptr;
     lv_obj_t* tempLabel = nullptr;
     lv_obj_t* humidityLabel = nullptr;
     lv_obj_t* tvocLabel = nullptr;
     lv_obj_t* eco2Label = nullptr;
-    lv_obj_t* nextAlarmLabel = nullptr;
+    lv_obj_t* ipAddressLabel = nullptr;
     lv_obj_t* currentAlarmScreen = nullptr;
     
     // Weather panel elements
@@ -229,8 +233,6 @@ private:
     lv_obj_t* afternoonIcon = nullptr;
     
     // Status bar elements
-    lv_obj_t* wifiSsidLabel = nullptr;
-    lv_obj_t* ipAddressLabel = nullptr;
     lv_obj_t* wifiQualityLabel = nullptr;
     
     // Callbacks
@@ -242,6 +244,7 @@ private:
     lv_style_t timeStyle;
     lv_style_t dateStyle;
     lv_style_t infoStyle;
+    lv_style_t statusStyle;
     lv_style_t buttonStyle;
     lv_style_t buttonPressedStyle;
     
@@ -287,6 +290,12 @@ public:
     static void day_btn_clicked_cb(lv_event_t* e);
     static void save_alarm_cb(lv_event_t* e);
     static void nav_btn_clicked_cb(lv_event_t* e);
+    
+    // New screen navigation callbacks
+    static void back_area_clicked_cb(lv_event_t* e);
+    static void alarm_btn_clicked_cb(lv_event_t* e);
+    static void radio_btn_clicked_cb(lv_event_t* e);
+    static void weather_btn_clicked_cb(lv_event_t* e);
 };
 
 // Static member will be defined in the cpp file

@@ -94,10 +94,13 @@ private:
     lv_disp_t *disp = nullptr;
     lv_indev_t *indev_touch = nullptr;
 
-    // Touch state
+public:
+    // Touch state - made public for direct access from main application
     static bool touch_has_signal;
     static int16_t touch_last_x;
     static int16_t touch_last_y;
+    
+private:
     
     // Backlight control
     static constexpr uint8_t BACKLIGHT_PWM_CHANNEL = 0;       // LEDC channel for backlight

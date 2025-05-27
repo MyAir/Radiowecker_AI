@@ -100,6 +100,11 @@ TaskHandle_t sensorsTaskHandle = NULL;
 TaskHandle_t alarmTaskHandle = NULL;
 TaskHandle_t weatherTaskHandle = NULL;
 
+// LVGL timer for settings screen timeout
+lv_timer_t* settingsTimeoutTimer = NULL;
+// Global tracking of last touch time for screen timeout
+unsigned long lastTouchTime = 0;
+
 Adafruit_SGP30 sgp;
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
 
@@ -107,6 +112,64 @@ Adafruit_SHT31 sht31 = Adafruit_SHT31();
 WebServer server(80);
 
 // LVGL display buffer is now managed by DisplayManager
+
+// LVGL callback for handling button events
+static void screen_change_event_cb(lv_event_t *e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t *btn = lv_event_get_target(e);
+    
+    if (code == LV_EVENT_CLICKED) {
+        // Get the screen type from user_data
+        uint32_t *screen_type = (uint32_t *)lv_event_get_user_data(e);
+        if (!screen_type) {
+            Serial.println("Error: No screen type data");
+            return;
+        }
+        
+        Serial.printf("Screen button clicked, type: %d\n", *screen_type);
+        
+        UIManager& ui = UIManager::getInstance();
+        switch (*screen_type) {
+            case 0: // Home screen
+                Serial.println("==== NAVIGATION: -> HOME (via button) ====");
+                ui.showHomeScreen();
+                break;
+            case 1: // Settings screen
+                Serial.println("==== NAVIGATION: -> SETTINGS (via button) ====");
+                ui.showSettingsScreen();
+                break;
+            case 2: // Alarm screen
+                Serial.println("==== NAVIGATION: -> ALARM (via button) ====");
+                ui.showAlarmSettingsScreen();
+                break;
+            case 3: // Radio screen
+                Serial.println("==== NAVIGATION: -> RADIO (via button) ====");
+                ui.showRadioScreen();
+                break;
+            default:
+                Serial.printf("Unknown screen type: %d\n", *screen_type);
+                break;
+        }
+    }
+}
+
+// Define timeout and debounce constants
+static const uint32_t settingsTimeoutDelay = 10000; // 10 seconds timeout for settings
+static const uint32_t debounceDelay = 500; // 500ms debounce between screen changes
+static uint32_t lastScreenChange = 0;
+
+// Callback for touchscreen events
+static void touchscreen_event_cb(lv_event_t *e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t *obj = lv_event_get_target(e);
+    
+    // Only handle press and release events
+    if (code == LV_EVENT_PRESSED) {
+        // Update last touch time for timeout calculation
+        lastTouchTime = millis();
+        Serial.println("Touch detected - updating timeout timer");
+    }
+}
 
 // Function declarations
 void setup();
@@ -309,6 +372,16 @@ void setup() {
     // Show home screen using the singleton instance
     ui.showHomeScreen();
     
+    // Initialize the settings screen timeout timer
+    settingsTimeoutTimer = lv_timer_create([](lv_timer_t* timer) {
+        // Check if we're on the settings screen and it's been more than 10 seconds since last touch
+        UIManager& ui = UIManager::getInstance();
+        if (ui.settingsScreen && lv_scr_act() == ui.settingsScreen && millis() - lastTouchTime > 10000) {
+            Serial.println("Settings screen timeout - returning to home screen");
+            ui.showHomeScreen();
+        }
+    }, 1000, NULL); // Check every second
+    
     Serial.println("Setup complete");
 }
 
@@ -376,24 +449,33 @@ void wifi_init() {
     // Get ConfigManager instance
     ConfigManager& config = ConfigManager::getInstance();
     
-    // Get WiFi credentials from config
+    // Get WiFi config
     WiFiConfig wifiConfig = config.getWiFiConfig();
-    const char* ssid = wifiConfig.ssid.c_str();
-    const char* password = wifiConfig.password.c_str();
     
-    // Connect to WiFi
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
-    
-    Serial.print("Connecting to WiFi");
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
+    // Connect to WiFi if SSID is not empty
+    if (!wifiConfig.ssid.isEmpty()) {
+        Serial.printf("Connecting to WiFi: %s\n", wifiConfig.ssid.c_str());
+        WiFi.begin(wifiConfig.ssid.c_str(), wifiConfig.password.c_str());
+        
+        // Wait for connection (with timeout)
+        uint8_t timeout_counter = 0;
+        while (WiFi.status() != WL_CONNECTED && timeout_counter < 20) { // 10 second timeout
+            delay(500);
+            Serial.print(".");
+            timeout_counter++;
+        }
+        
+        if (WiFi.status() == WL_CONNECTED) {
+            Serial.println();
+            Serial.println("WiFi connected");
+            Serial.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
+        } else {
+            Serial.println();
+            Serial.println("WiFi connection failed. Continuing without WiFi.");
+        }
+    } else {
+        Serial.println("WiFi SSID not configured. Not connecting.");
     }
-    
-    Serial.println("");
-    Serial.print("Connected to WiFi network with IP Address: ");
-    Serial.println(WiFi.localIP());
 }
 
 void time_init() {
@@ -605,18 +687,78 @@ void web_server_init() {
 }
 
 void update_display_task(void *parameter) {
-    // Get UIManager instance
+    // Get the UIManager instance
     UIManager& ui = UIManager::getInstance();
+    DisplayManager& display = DisplayManager::getInstance();
     
-    // Timing variables for WiFi status updates
+    // Variables for time tracking
+    unsigned long previousTimeUpdate = 0;
+    String lastDisplayedTime = "";
+    
+    // Variables for touch handling
+    bool lastTouched = false;
+    uint32_t touchStartTime = 0;
+    
+    // Variables for WiFi status updates
     uint32_t lastWifiStatusUpdate = 0;
-    const uint32_t WIFI_STATUS_UPDATE_INTERVAL = 5000; // Update every 5 seconds
+    const uint32_t WIFI_STATUS_UPDATE_INTERVAL = 30000; // Update every 30 seconds to reduce flicker
     
+    // German weekday names
+    String weekdays_de[] = {"Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"};
+    
+    // Create a structure to store current time components
+    struct tm timeinfo;
+    
+    // Screen state tracking
+    static bool onHomeScreen = true;
+
+    // Task loop
     while (1) {
+        // Get current time
         uint32_t currentTime = millis();
         
-        // Update the display using the singleton instance
-        DisplayManager::getInstance().update();
+        // Process LVGL tasks via DisplayManager
+        display.update(); // Process LVGL tasks + touch events
+        
+        // Update time display every second
+        if (currentTime - previousTimeUpdate >= 1000) {
+            previousTimeUpdate = currentTime;
+            
+            // Get local time
+            time_t now;
+            time(&now);
+            localtime_r(&now, &timeinfo);
+            
+            // Format time string
+            char timeString[10];
+            sprintf(timeString, "%02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+            
+            // Only update if time changed
+            if (String(timeString) != lastDisplayedTime) {
+                lastDisplayedTime = timeString;
+                Serial.printf("[DEBUG] Updating time from '%s' to '%s'\n", lastDisplayedTime.c_str(), timeString);
+                
+                // Update time on display
+                ui.updateTime(timeString);
+                
+                // Update date once per minute or on initial startup
+                static bool firstUpdate = true;
+                if (timeinfo.tm_sec == 0 || firstUpdate) {
+                    char dateString[32];
+                    
+                    // Simpler, more reliable date format: "Weekday, dd.mm.yyyy"
+                    sprintf(dateString, "%s, %02d.%02d.%04d", 
+                            weekdays_de[timeinfo.tm_wday].c_str(), 
+                            timeinfo.tm_mday, 
+                            timeinfo.tm_mon + 1, 
+                            timeinfo.tm_year + 1900);
+                    
+                    Serial.printf("Setting date: %s\n", dateString);
+                    ui.updateDate(dateString);
+                    firstUpdate = false;
+                }
+            }
+        }
         
         // Update WiFi status information periodically
         if (currentTime - lastWifiStatusUpdate >= WIFI_STATUS_UPDATE_INTERVAL) {
@@ -660,7 +802,6 @@ void update_display_task(void *parameter) {
     }
     vTaskDelete(NULL);
 }
-
 void update_sensors_task(void *parameter) {
     // Get ConfigManager and UIManager instances once
     ConfigManager& config = ConfigManager::getInstance();
@@ -669,8 +810,8 @@ void update_sensors_task(void *parameter) {
     // Timing variables
     uint32_t lastSHT31Read = 0;
     uint32_t lastSGP30Read = 0;
-    const uint32_t SHT31_READ_INTERVAL = 2000;  // 2 seconds
-    const uint32_t SGP30_READ_INTERVAL = 1000;  // 1 second
+    const uint32_t SHT31_READ_INTERVAL = 10000;  // 10 seconds
+    const uint32_t SGP30_READ_INTERVAL = 5000;  // 5 seconds
     
     while (1) {
         uint32_t currentTime = millis();
