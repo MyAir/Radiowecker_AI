@@ -4,6 +4,7 @@
 #include <lvgl.h>
 #include "ConfigManager.h"
 #include "DisplayManager.h"
+#include "WeatherIcons.h"
 
 // Forward declare LVGL types we need
 typedef struct _lv_obj_t lv_obj_t;
@@ -220,17 +221,20 @@ private:
     lv_obj_t* feelsLikeLabel = nullptr;
     lv_obj_t* weatherDescLabel = nullptr;
     lv_obj_t* weatherIcon = nullptr;
+    lv_obj_t* weatherIconImg = nullptr;
     
     // Forecast elements
     lv_obj_t* forecastPanel = nullptr;
     lv_obj_t* morningTitle = nullptr;
+    lv_obj_t* afternoonTitle = nullptr;
     lv_obj_t* morningTempLabel = nullptr;
     lv_obj_t* morningRainLabel = nullptr;
     lv_obj_t* morningIcon = nullptr;
-    lv_obj_t* afternoonTitle = nullptr;
+    lv_obj_t* morningIconImg = nullptr;
+    lv_obj_t* afternoonIcon = nullptr;
+    lv_obj_t* afternoonIconImg = nullptr;
     lv_obj_t* afternoonTempLabel = nullptr;
     lv_obj_t* afternoonRainLabel = nullptr;
-    lv_obj_t* afternoonIcon = nullptr;
     
     // Status bar elements
     lv_obj_t* wifiQualityLabel = nullptr;

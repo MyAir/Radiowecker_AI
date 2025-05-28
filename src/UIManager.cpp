@@ -343,7 +343,9 @@ void UIManager::updateWifiQuality(int quality) {
         snprintf(qualityStr, sizeof(qualityStr), "📶 %d%%", quality);
     }
     
-    lv_label_set_text(wifiQualityLabel, qualityStr);
+    if (wifiQualityLabel) {
+        lv_label_set_text(wifiQualityLabel, qualityStr);
+    }
 }
 
 void UIManager::updateCurrentWeather(float temp, float feels_like, const char* description, const char* iconCode) {
@@ -352,51 +354,70 @@ void UIManager::updateCurrentWeather(float temp, float feels_like, const char* d
         return;
     }
     
-    // Update the current temperature
-    char tempStr[16];
-    snprintf(tempStr, sizeof(tempStr), "%.1f°C", temp);
-    lv_label_set_text(currentTempLabel, tempStr);
+    // Update temperature
+    if (currentTempLabel) {
+        char tempStr[16];
+        snprintf(tempStr, sizeof(tempStr), "%.1f°C", temp);
+        lv_label_set_text(currentTempLabel, tempStr);
+    }
     
     // Update feels like temperature
-    char feelsLikeStr[32];
-    snprintf(feelsLikeStr, sizeof(feelsLikeStr), "Gefühlt: %.1f°C", feels_like);
-    lv_label_set_text(feelsLikeLabel, feelsLikeStr);
+    if (feelsLikeLabel) {
+        char feelsLikeStr[32];
+        snprintf(feelsLikeStr, sizeof(feelsLikeStr), "Gefühlt: %.1f°C", feels_like);
+        lv_label_set_text(feelsLikeLabel, feelsLikeStr);
+    }
     
-    // Update weather description
-    lv_label_set_text(weatherDescLabel, description);
+    // Update description
+    if (weatherDescLabel && description) {
+        lv_label_set_text(weatherDescLabel, description);
+    }
     
-    // Display weather icon (based on icon code)
-    // Map OpenWeatherMap icon codes to emoji for now
-    // In a real implementation, you might use actual icon images
-    const char* iconEmoji = "🌤️"; // Default
-    
-    // Map the icon code to emoji
+    // Update weather icon
     if (iconCode) {
-        if (strncmp(iconCode, "01", 2) == 0) { // Clear sky
-            iconEmoji = "☀️";
-        } else if (strncmp(iconCode, "02", 2) == 0) { // Few clouds
-            iconEmoji = "🌤️";
-        } else if (strncmp(iconCode, "03", 2) == 0) { // Scattered clouds
-            iconEmoji = "⛅";
-        } else if (strncmp(iconCode, "04", 2) == 0) { // Broken clouds
-            iconEmoji = "☁️";
-        } else if (strncmp(iconCode, "09", 2) == 0) { // Shower rain
-            iconEmoji = "🌧️";
-        } else if (strncmp(iconCode, "10", 2) == 0) { // Rain
-            iconEmoji = "🌦️";
-        } else if (strncmp(iconCode, "11", 2) == 0) { // Thunderstorm
-            iconEmoji = "⛈️";
-        } else if (strncmp(iconCode, "13", 2) == 0) { // Snow
-            iconEmoji = "❄️";
-        } else if (strncmp(iconCode, "50", 2) == 0) { // Mist
-            iconEmoji = "🌫️";
+        const lv_img_dsc_t* icon = get_weather_icon(iconCode);
+        if (icon) {
+            // Hide the text icon if it exists
+            if (weatherIcon) {
+                lv_obj_add_flag(weatherIcon, LV_OBJ_FLAG_HIDDEN);
+            }
+            
+            // Create the image if it doesn't exist
+            if (!weatherIconImg) {
+                weatherIconImg = lv_img_create(lv_obj_get_parent(weatherIcon));
+                lv_obj_align(weatherIconImg, LV_ALIGN_CENTER, 0, 0);
+                lv_obj_set_size(weatherIconImg, 60, 60); // Match the container size
+            }
+            
+            // Update the image source
+            lv_img_set_src(weatherIconImg, icon);
+            lv_obj_clear_flag(weatherIconImg, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            // Fall back to text icon if no image is available
+            const char* defaultIcon = "⛅"; // Default icon
+            if (weatherIcon) {
+                lv_label_set_text(weatherIcon, defaultIcon);
+                lv_obj_clear_flag(weatherIcon, LV_OBJ_FLAG_HIDDEN);
+            }
+            
+            // Hide the image if it exists
+            if (weatherIconImg) {
+                lv_obj_add_flag(weatherIconImg, LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+    } else if (weatherIcon) {
+        // No icon code provided, show a default icon
+        lv_label_set_text(weatherIcon, "⛅");
+        lv_obj_clear_flag(weatherIcon, LV_OBJ_FLAG_HIDDEN);
+        
+        // Hide the image if it exists
+        if (weatherIconImg) {
+            lv_obj_add_flag(weatherIconImg, LV_OBJ_FLAG_HIDDEN);
         }
     }
     
-    lv_label_set_text(weatherIcon, iconEmoji);
-    
-    Serial.printf("[INFO] Updated current weather: %s, %s, %s\n", 
-                 tempStr, feelsLikeStr, description);
+    Serial.printf("[INFO] Updated current weather: %.1f°C, Gefühlt: %.1f°C, %s\n", 
+                 temp, feels_like, description);
                  
     // Force refresh
     lv_obj_invalidate(weatherPanel);
@@ -411,43 +432,55 @@ void UIManager::updateMorningForecast(float temp, float pop, const char* iconCod
     // Update temperature
     char tempStr[16];
     snprintf(tempStr, sizeof(tempStr), "%.1f°C", temp);
-    lv_label_set_text(morningTempLabel, tempStr);
+    if (morningTempLabel) {
+        lv_label_set_text(morningTempLabel, tempStr);
+    }
     
     // Update rain probability
     char rainStr[16];
     snprintf(rainStr, sizeof(rainStr), "☔ %.0f%%", pop * 100);
-    lv_label_set_text(morningRainLabel, rainStr);
+    if (morningRainLabel) {
+        lv_label_set_text(morningRainLabel, rainStr);
+    }
     
-    // Display weather icon (based on icon code)
-    const char* iconEmoji = "🌤️"; // Default
-    
-    // Map the icon code to emoji (same mapping as current weather)
+    // Update weather icon
     if (iconCode) {
-        if (strncmp(iconCode, "01", 2) == 0) { // Clear sky
-            iconEmoji = "☀️";
-        } else if (strncmp(iconCode, "02", 2) == 0) { // Few clouds
-            iconEmoji = "🌤️";
-        } else if (strncmp(iconCode, "03", 2) == 0) { // Scattered clouds
-            iconEmoji = "⛅";
-        } else if (strncmp(iconCode, "04", 2) == 0) { // Broken clouds
-            iconEmoji = "☁️";
-        } else if (strncmp(iconCode, "09", 2) == 0) { // Shower rain
-            iconEmoji = "🌧️";
-        } else if (strncmp(iconCode, "10", 2) == 0) { // Rain
-            iconEmoji = "🌦️";
-        } else if (strncmp(iconCode, "11", 2) == 0) { // Thunderstorm
-            iconEmoji = "⛈️";
-        } else if (strncmp(iconCode, "13", 2) == 0) { // Snow
-            iconEmoji = "❄️";
-        } else if (strncmp(iconCode, "50", 2) == 0) { // Mist
-            iconEmoji = "🌫️";
+        // Get the appropriate icon from the weather icons
+        const lv_img_dsc_t* icon = get_weather_icon(iconCode);
+        
+        // If we have an image icon, use it
+        if (icon) {
+            // Hide the text icon if it exists
+            if (morningIcon) {
+                lv_obj_add_flag(morningIcon, LV_OBJ_FLAG_HIDDEN);
+            }
+            
+            // Create or update the image
+            if (!morningIconImg) {
+                morningIconImg = lv_img_create(lv_obj_get_parent(morningIcon));
+                lv_img_set_src(morningIconImg, icon);
+                lv_obj_align_to(morningIconImg, morningIcon, LV_ALIGN_CENTER, 0, 0);
+                lv_obj_set_size(morningIconImg, 40, 40);
+            } else {
+                lv_img_set_src(morningIconImg, icon);
+                lv_obj_clear_flag(morningIconImg, LV_OBJ_FLAG_HIDDEN);
+            }
+        } else {
+            // Fall back to text icon if no image is available
+            const char* iconText = "⛅"; // Default icon
+            if (morningIcon) {
+                lv_label_set_text(morningIcon, iconText);
+                lv_obj_clear_flag(morningIcon, LV_OBJ_FLAG_HIDDEN);
+            }
+            
+            // Hide the image if it exists
+            if (morningIconImg) {
+                lv_obj_add_flag(morningIconImg, LV_OBJ_FLAG_HIDDEN);
+            }
         }
     }
     
-    lv_label_set_text(morningIcon, iconEmoji);
-    
-    Serial.printf("[INFO] Updated morning forecast: %s, Rain: %.0f%%\n", 
-                 tempStr, pop * 100);
+    Serial.printf("[INFO] Updated morning forecast: %.1f°C, Rain: %.0f%%\n", temp, pop * 100);
 }
 
 void UIManager::updateAfternoonForecast(float temp, float pop, const char* iconCode) {
@@ -466,36 +499,45 @@ void UIManager::updateAfternoonForecast(float temp, float pop, const char* iconC
     snprintf(rainStr, sizeof(rainStr), "☔ %.0f%%", pop * 100);
     lv_label_set_text(afternoonRainLabel, rainStr);
     
-    // Display weather icon (based on icon code)
-    const char* iconEmoji = "🌤️"; // Default
-    
-    // Map the icon code to emoji (same mapping as current weather)
+    // Update weather icon
     if (iconCode) {
-        if (strncmp(iconCode, "01", 2) == 0) { // Clear sky
-            iconEmoji = "☀️";
-        } else if (strncmp(iconCode, "02", 2) == 0) { // Few clouds
-            iconEmoji = "🌤️";
-        } else if (strncmp(iconCode, "03", 2) == 0) { // Scattered clouds
-            iconEmoji = "⛅";
-        } else if (strncmp(iconCode, "04", 2) == 0) { // Broken clouds
-            iconEmoji = "☁️";
-        } else if (strncmp(iconCode, "09", 2) == 0) { // Shower rain
-            iconEmoji = "🌧️";
-        } else if (strncmp(iconCode, "10", 2) == 0) { // Rain
-            iconEmoji = "🌦️";
-        } else if (strncmp(iconCode, "11", 2) == 0) { // Thunderstorm
-            iconEmoji = "⛈️";
-        } else if (strncmp(iconCode, "13", 2) == 0) { // Snow
-            iconEmoji = "❄️";
-        } else if (strncmp(iconCode, "50", 2) == 0) { // Mist
-            iconEmoji = "🌫️";
+        // Get the appropriate icon from the weather icons
+        const lv_img_dsc_t* icon = get_weather_icon(iconCode);
+        
+        // If we have an image icon, use it
+        if (icon) {
+            // Hide the text icon if it exists
+            if (afternoonIcon) {
+                lv_obj_add_flag(afternoonIcon, LV_OBJ_FLAG_HIDDEN);
+            }
+            
+            // Create or update the image
+            if (!afternoonIconImg) {
+                afternoonIconImg = lv_img_create(lv_obj_get_parent(afternoonIcon));
+                lv_img_set_src(afternoonIconImg, icon);
+                lv_obj_align_to(afternoonIconImg, afternoonIcon, LV_ALIGN_CENTER, 0, 0);
+                lv_obj_set_size(afternoonIconImg, 40, 40);
+            } else {
+                lv_img_set_src(afternoonIconImg, icon);
+                lv_obj_clear_flag(afternoonIconImg, LV_OBJ_FLAG_HIDDEN);
+            }
+        } else {
+            // Fall back to text icon if no image is available
+            const char* iconText = "⛅"; // Default icon
+            if (afternoonIcon) {
+                lv_label_set_text(afternoonIcon, iconText);
+                lv_obj_clear_flag(afternoonIcon, LV_OBJ_FLAG_HIDDEN);
+            }
+            
+            // Hide the image if it exists
+            if (afternoonIconImg) {
+                lv_obj_add_flag(afternoonIconImg, LV_OBJ_FLAG_HIDDEN);
+            }
         }
     }
     
-    lv_label_set_text(afternoonIcon, iconEmoji);
-    
-    Serial.printf("[INFO] Updated afternoon forecast: %s, Rain: %.0f%%\n", 
-                 tempStr, pop * 100);
+    Serial.printf("[INFO] Updated afternoon forecast: %.1f°C, Rain: %.0f%%\n", 
+                 temp, pop * 100);
 }
 
 void UIManager::radio_volume_changed_cb(lv_event_t* e) {
@@ -995,10 +1037,20 @@ void UIManager::createHomeScreen() {
     lv_obj_align(currentWeatherTitle, LV_ALIGN_TOP_MID, 0, 5);
     
     // Weather icon - centered for narrow panel
-    weatherIcon = lv_label_create(weatherPanel);
+    // Create a container for the weather icon (will contain both label and image)
+    lv_obj_t* weatherIconContainer = lv_obj_create(weatherPanel);
+    lv_obj_remove_style_all(weatherIconContainer);  // Remove default styles
+    lv_obj_set_size(weatherIconContainer, 60, 60);  // Fixed size for the container
+    lv_obj_align(weatherIconContainer, LV_ALIGN_TOP_MID, 0, 40);
+    
+    // Create the label (fallback)
+    weatherIcon = lv_label_create(weatherIconContainer);
     lv_obj_set_style_text_font(weatherIcon, &lv_font_montserrat_48, 0);
-    lv_label_set_text(weatherIcon, "🌤️");  // Default icon
-    lv_obj_align(weatherIcon, LV_ALIGN_TOP_MID, 0, 40);
+    lv_label_set_text(weatherIcon, "⛅");  // Default icon
+    lv_obj_center(weatherIcon);
+    
+    // The image will be created in updateCurrentWeather when we have the actual icon data
+    weatherIconImg = NULL;  // Will be created when needed
     
     // Current temperature
     currentTempLabel = lv_label_create(weatherPanel);
@@ -1035,10 +1087,20 @@ void UIManager::createHomeScreen() {
     lv_label_set_text(morningTitle, "Vormittag");
     lv_obj_align(morningTitle, LV_ALIGN_TOP_MID, 0, 10);
     
-    morningIcon = lv_label_create(forecastPanel);
-    lv_obj_set_style_text_font(morningIcon, &lv_font_montserrat_20, 0); // Smaller font
-    lv_label_set_text(morningIcon, "🌤️");
-    lv_obj_align(morningIcon, LV_ALIGN_TOP_MID, 0, 35);
+    // Create a container for the morning forecast icon
+    lv_obj_t* morningIconContainer = lv_obj_create(forecastPanel);
+    lv_obj_remove_style_all(morningIconContainer);
+    lv_obj_set_size(morningIconContainer, 40, 40);
+    lv_obj_align(morningIconContainer, LV_ALIGN_TOP_MID, 0, 35);
+    
+    // Create the label (fallback)
+    morningIcon = lv_label_create(morningIconContainer);
+    lv_obj_set_style_text_font(morningIcon, &lv_font_montserrat_20, 0);
+    lv_label_set_text(morningIcon, "⛅");
+    lv_obj_center(morningIcon);
+    
+    // The image will be created in updateMorningForecast when we have the actual icon data
+    morningIconImg = NULL;  // Will be created when needed
     
     morningTempLabel = lv_label_create(forecastPanel);
     lv_obj_add_style(morningTempLabel, &infoStyle, 0);
@@ -1051,6 +1113,22 @@ void UIManager::createHomeScreen() {
     lv_obj_align(morningRainLabel, LV_ALIGN_TOP_MID, 0, 80);
     
     // Afternoon forecast - stacked vertically
+    // Create a container for the afternoon forecast icon
+    lv_obj_t* afternoonIconContainer = lv_obj_create(forecastPanel);
+    lv_obj_remove_style_all(afternoonIconContainer);
+    lv_obj_set_size(afternoonIconContainer, 40, 40);
+    lv_obj_align(afternoonIconContainer, LV_ALIGN_TOP_MID, 0, 130);
+    
+    // Create the label (fallback)
+    afternoonIcon = lv_label_create(afternoonIconContainer);
+    lv_obj_set_style_text_font(afternoonIcon, &lv_font_montserrat_20, 0);
+    lv_label_set_text(afternoonIcon, "⛅");
+    lv_obj_center(afternoonIcon);
+    
+    // The image will be created in updateAfternoonForecast when we have the actual icon data
+    afternoonIconImg = NULL;  // Will be created when needed
+    
+    // Afternoon title
     afternoonTitle = lv_label_create(forecastPanel);
     lv_obj_add_style(afternoonTitle, &infoStyle, 0);
     lv_label_set_text(afternoonTitle, "Nachmittag");
