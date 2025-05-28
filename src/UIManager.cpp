@@ -375,34 +375,41 @@ void UIManager::updateCurrentWeather(float temp, float feels_like, const char* d
     
     // Update weather icon
     if (iconCode) {
-        const lv_img_dsc_t* icon = get_weather_icon(iconCode);
-        if (icon) {
-            // Hide the text icon if it exists
-            if (weatherIcon) {
-                lv_obj_add_flag(weatherIcon, LV_OBJ_FLAG_HIDDEN);
-            }
-            
-            // Create the image if it doesn't exist
-            if (!weatherIconImg) {
-                weatherIconImg = lv_img_create(lv_obj_get_parent(weatherIcon));
-                lv_obj_align(weatherIconImg, LV_ALIGN_CENTER, 0, 0);
-                lv_obj_set_size(weatherIconImg, 60, 60); // Match the container size
-            }
-            
-            // Update the image source
-            lv_img_set_src(weatherIconImg, icon);
+        // Remove the old image if it exists
+        if (weatherIconImg) {
+            lv_obj_del(weatherIconImg);
+            weatherIconImg = nullptr;
+        }
+        
+        // Hide the text icon if it exists
+        if (weatherIcon) {
+            lv_obj_add_flag(weatherIcon, LV_OBJ_FLAG_HIDDEN);
+        }
+        
+        // Get the parent of the weather icon
+        lv_obj_t* parent = lv_obj_get_parent(weatherIcon);
+        if (!parent) {
+            parent = lv_scr_act();
+        }
+        
+        // Create a new weather icon with proper transparency handling
+        weatherIconImg = create_weather_icon(parent, iconCode);
+        if (weatherIconImg) {
+            // Position the icon where the text icon was
+            lv_obj_align_to(weatherIconImg, weatherIcon, LV_ALIGN_CENTER, 0, 0);
             lv_obj_clear_flag(weatherIconImg, LV_OBJ_FLAG_HIDDEN);
+            
+            // Ensure the parent has no background
+            lv_obj_set_style_bg_opa(parent, LV_OPA_TRANSP, 0);
+            lv_obj_set_style_border_opa(parent, LV_OPA_TRANSP, 0);
+            lv_obj_set_style_outline_opa(parent, LV_OPA_TRANSP, 0);
+            lv_obj_set_style_pad_all(parent, 0, 0);
         } else {
-            // Fall back to text icon if no image is available
+            // Fall back to text icon if image creation failed
             const char* defaultIcon = "⛅"; // Default icon
             if (weatherIcon) {
                 lv_label_set_text(weatherIcon, defaultIcon);
                 lv_obj_clear_flag(weatherIcon, LV_OBJ_FLAG_HIDDEN);
-            }
-            
-            // Hide the image if it exists
-            if (weatherIconImg) {
-                lv_obj_add_flag(weatherIconImg, LV_OBJ_FLAG_HIDDEN);
             }
         }
     } else if (weatherIcon) {
@@ -445,37 +452,44 @@ void UIManager::updateMorningForecast(float temp, float pop, const char* iconCod
     
     // Update weather icon
     if (iconCode) {
-        // Get the appropriate icon from the weather icons
-        const lv_img_dsc_t* icon = get_weather_icon(iconCode);
+        // Remove the old image if it exists
+        if (morningIconImg) {
+            lv_obj_del(morningIconImg);
+            morningIconImg = nullptr;
+        }
         
-        // If we have an image icon, use it
-        if (icon) {
-            // Hide the text icon if it exists
-            if (morningIcon) {
-                lv_obj_add_flag(morningIcon, LV_OBJ_FLAG_HIDDEN);
-            }
+        // Hide the text icon if it exists
+        if (morningIcon) {
+            lv_obj_add_flag(morningIcon, LV_OBJ_FLAG_HIDDEN);
+        }
+        
+        // Remove old icon if it exists
+        if (morningIconImg) {
+            lv_obj_del(morningIconImg);
+            morningIconImg = nullptr;
+        }
+        
+        // Hide the text icon
+        if (morningIcon) {
+            lv_obj_add_flag(morningIcon, LV_OBJ_FLAG_HIDDEN);
+        }
+        
+        // Create a new weather icon
+        morningIconImg = create_weather_icon(lv_scr_act(), iconCode);
+        if (morningIconImg) {
+            // Position and size the icon
+            lv_obj_set_size(morningIconImg, 40, 40);
+            lv_obj_align_to(morningIconImg, morningIcon, LV_ALIGN_CENTER, 0, 0);
+            lv_obj_clear_flag(morningIconImg, LV_OBJ_FLAG_HIDDEN);
             
-            // Create or update the image
-            if (!morningIconImg) {
-                morningIconImg = lv_img_create(lv_obj_get_parent(morningIcon));
-                lv_img_set_src(morningIconImg, icon);
-                lv_obj_align_to(morningIconImg, morningIcon, LV_ALIGN_CENTER, 0, 0);
-                lv_obj_set_size(morningIconImg, 40, 40);
-            } else {
-                lv_img_set_src(morningIconImg, icon);
-                lv_obj_clear_flag(morningIconImg, LV_OBJ_FLAG_HIDDEN);
-            }
+            // Make sure the parent container is transparent
+            lv_obj_set_style_bg_opa(lv_obj_get_parent(morningIconImg), LV_OPA_TRANSP, 0);
         } else {
-            // Fall back to text icon if no image is available
-            const char* iconText = "⛅"; // Default icon
+            // Fall back to text icon if image creation failed
+            const char* defaultIcon = "⛅"; // Default icon
             if (morningIcon) {
-                lv_label_set_text(morningIcon, iconText);
+                lv_label_set_text(morningIcon, defaultIcon);
                 lv_obj_clear_flag(morningIcon, LV_OBJ_FLAG_HIDDEN);
-            }
-            
-            // Hide the image if it exists
-            if (morningIconImg) {
-                lv_obj_add_flag(morningIconImg, LV_OBJ_FLAG_HIDDEN);
             }
         }
     }
@@ -501,37 +515,44 @@ void UIManager::updateAfternoonForecast(float temp, float pop, const char* iconC
     
     // Update weather icon
     if (iconCode) {
-        // Get the appropriate icon from the weather icons
-        const lv_img_dsc_t* icon = get_weather_icon(iconCode);
+        // Remove the old image if it exists
+        if (afternoonIconImg) {
+            lv_obj_del(afternoonIconImg);
+            afternoonIconImg = nullptr;
+        }
         
-        // If we have an image icon, use it
-        if (icon) {
-            // Hide the text icon if it exists
-            if (afternoonIcon) {
-                lv_obj_add_flag(afternoonIcon, LV_OBJ_FLAG_HIDDEN);
-            }
+        // Hide the text icon if it exists
+        if (afternoonIcon) {
+            lv_obj_add_flag(afternoonIcon, LV_OBJ_FLAG_HIDDEN);
+        }
+        
+        // Remove old icon if it exists
+        if (afternoonIconImg) {
+            lv_obj_del(afternoonIconImg);
+            afternoonIconImg = nullptr;
+        }
+        
+        // Hide the text icon
+        if (afternoonIcon) {
+            lv_obj_add_flag(afternoonIcon, LV_OBJ_FLAG_HIDDEN);
+        }
+        
+        // Create a new weather icon
+        afternoonIconImg = create_weather_icon(lv_scr_act(), iconCode);
+        if (afternoonIconImg) {
+            // Position and size the icon
+            lv_obj_set_size(afternoonIconImg, 40, 40);
+            lv_obj_align_to(afternoonIconImg, afternoonIcon, LV_ALIGN_CENTER, 0, 0);
+            lv_obj_clear_flag(afternoonIconImg, LV_OBJ_FLAG_HIDDEN);
             
-            // Create or update the image
-            if (!afternoonIconImg) {
-                afternoonIconImg = lv_img_create(lv_obj_get_parent(afternoonIcon));
-                lv_img_set_src(afternoonIconImg, icon);
-                lv_obj_align_to(afternoonIconImg, afternoonIcon, LV_ALIGN_CENTER, 0, 0);
-                lv_obj_set_size(afternoonIconImg, 40, 40);
-            } else {
-                lv_img_set_src(afternoonIconImg, icon);
-                lv_obj_clear_flag(afternoonIconImg, LV_OBJ_FLAG_HIDDEN);
-            }
+            // Make sure the parent container is transparent
+            lv_obj_set_style_bg_opa(lv_obj_get_parent(afternoonIconImg), LV_OPA_TRANSP, 0);
         } else {
-            // Fall back to text icon if no image is available
-            const char* iconText = "⛅"; // Default icon
+            // Fall back to text icon if image creation failed
+            const char* defaultIcon = "⛅"; // Default icon
             if (afternoonIcon) {
-                lv_label_set_text(afternoonIcon, iconText);
+                lv_label_set_text(afternoonIcon, defaultIcon);
                 lv_obj_clear_flag(afternoonIcon, LV_OBJ_FLAG_HIDDEN);
-            }
-            
-            // Hide the image if it exists
-            if (afternoonIconImg) {
-                lv_obj_add_flag(afternoonIconImg, LV_OBJ_FLAG_HIDDEN);
             }
         }
     }

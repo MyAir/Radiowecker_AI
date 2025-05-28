@@ -30,6 +30,14 @@ extern const lv_img_dsc_t icon_50n;
 // Function to get the appropriate weather icon
 const lv_img_dsc_t* get_weather_icon(const char* iconCode);
 
+/**
+ * @brief Create a weather icon with proper transparency handling
+ * @param parent The parent object for the icon
+ * @param iconCode The OpenWeatherMap icon code (e.g., "01d", "02n")
+ * @return lv_obj_t* Pointer to the created image object, or NULL on failure
+ */
+lv_obj_t* create_weather_icon(lv_obj_t* parent, const char* iconCode);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

@@ -10,6 +10,34 @@
 
 #define LV_COLOR_DEPTH 16
 
+/* Chroma key color (pixels with this color will be transparent) */
+#define LV_COLOR_CHROMA_KEY lv_color_hex(0x000000)  /* Pure black for chroma key */
+
+/* Set the transparent color index (for indexed color formats) */
+#define LV_IMG_CF_INDEXED_1_BIT_TRANSP 0
+#define LV_IMG_CF_ALPHA_1_BIT 1
+
+/* Enable true color support */
+#define LV_COLOR_16_SWAP 0  /* Swap the 2 bytes of RGB565 color */
+
+/* Enable image formats */
+#define LV_IMG_CF_TRUE_COLOR 1
+#define LV_IMG_CF_TRUE_COLOR_ALPHA 1
+#define LV_IMG_CF_ALPHA_1BIT 1
+#define LV_IMG_CF_ALPHA_2BIT 1
+#define LV_IMG_CF_ALPHA_4BIT 1
+#define LV_IMG_CF_ALPHA_8BIT 1
+#define LV_IMG_CF_INDEXED_1BIT 1
+
+/* Enable image cache */
+#define LV_IMG_CACHE_DEF_SIZE 32
+
+/* Enable custom color format if needed */
+#define LV_USE_USER_DATA 1
+
+/* Enable image cache */
+#define LV_IMG_CACHE_DEF_SIZE 16
+
 /*====================
    MEMORY SETTINGS
  *====================*/
