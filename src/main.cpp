@@ -15,7 +15,7 @@
 #include <Wire.h>
 #include <SPIFFS.h>
 #include <FS.h>
-#include <SD_MMC.h>
+// SD_MMC.h removed to fix initialization errors
 #include <WiFiUdp.h>
 #include <NTPClient.h>
 #include <ArduinoOTA.h>
@@ -45,6 +45,7 @@
 #include "ConfigManager.h"
 #include "AudioManager.h"
 #include "AlarmManager.h"
+#include "Globals.h" // For I2C management functions
 
 // Backlight control
 #define BACKLIGHT_PIN 44  // Backlight control pin (PWM)
@@ -54,9 +55,10 @@
 #define I2C_SCL 37
 
 // SD Card
-#define SD_MMC_CMD 13
-#define SD_MMC_CLK 12
-#define SD_MMC_D0 11
+// SD_MMC pins commented out to fix initialization errors
+// #define SD_MMC_CMD 13
+// #define SD_MMC_CLK 12
+// #define SD_MMC_D0 11
 
 // Audio
 #define I2S_DOUT 10
@@ -67,6 +69,53 @@
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org");
 Preferences preferences;
+
+// Global state variables defined in Globals.h
+bool g_i2c_initialized = false;
+unsigned long g_last_touch_time = 0;
+
+/**
+ * Very simple I2C bus initialization that avoids memory issues
+ * 
+ * @param sda SDA pin number
+ * @param scl SCL pin number
+ * @param force Force reinitialization even if already initialized
+ * @return true if initialization was successful
+ */
+bool initI2C(int sda, int scl, bool force = false) {
+    // Validate pins
+    if (sda < 0 || scl < 0 || sda >= 48 || scl >= 48) {
+        Serial.println("Invalid I2C pins");
+        return false;
+    }
+    
+    // If force is true or we're not initialized yet, initialize I2C
+    if (force || !g_i2c_initialized) {
+        // End any existing I2C bus
+        Wire.end();
+        delay(10);
+        
+        // Begin new I2C bus
+        Wire.begin(sda, scl);
+        g_i2c_initialized = true;
+        Serial.printf("I2C initialized with SDA=%d, SCL=%d\n", sda, scl);
+        return true;
+    }
+    
+    return true; // Already initialized
+}
+
+/**
+ * Simple I2C bus reset 
+ */
+void resetI2C(int sda, int scl) {
+    Wire.end();
+    delay(50);
+    g_i2c_initialized = false;
+    Wire.begin(sda, scl);
+    g_i2c_initialized = true;
+    Serial.println("I2C bus reset complete");
+}
 
 // Global display manager instance (forward declaration)
 class DisplayManager;
@@ -102,8 +151,6 @@ TaskHandle_t weatherTaskHandle = NULL;
 
 // LVGL timer for settings screen timeout
 lv_timer_t* settingsTimeoutTimer = NULL;
-// Global tracking of last touch time for screen timeout
-unsigned long lastTouchTime = 0;
 
 Adafruit_SGP30 sgp;
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
@@ -165,8 +212,8 @@ static void touchscreen_event_cb(lv_event_t *e) {
     
     // Only handle press and release events
     if (code == LV_EVENT_PRESSED) {
-        // Update last touch time for timeout calculation
-        lastTouchTime = millis();
+        // Update global last touch time for timeout calculation
+        g_last_touch_time = millis();
         Serial.println("Touch detected - updating timeout timer");
     }
 }
@@ -376,7 +423,7 @@ void setup() {
     settingsTimeoutTimer = lv_timer_create([](lv_timer_t* timer) {
         // Check if we're on the settings screen and it's been more than 10 seconds since last touch
         UIManager& ui = UIManager::getInstance();
-        if (ui.settingsScreen && lv_scr_act() == ui.settingsScreen && millis() - lastTouchTime > 10000) {
+        if (ui.settingsScreen && lv_scr_act() == ui.settingsScreen && millis() - g_last_touch_time > 10000) {
             Serial.println("Settings screen timeout - returning to home screen");
             ui.showHomeScreen();
         }
@@ -577,66 +624,64 @@ void sdcard_init() {
 }
 
 void sensors_init() {
-    // Get ConfigManager instance
+    Serial.println("[INFO] Initializing environmental sensors...");
+    
+    // Get ConfigManager instance to update the configuration
     ConfigManager& config = ConfigManager::getInstance();
     
-    // Get I2C pins from config
-    int sdaPin = config.getI2CSDAPin();
-    int sclPin = config.getI2CSCLPin();
+    // Default to sensors unavailable - will set to true if initialization succeeds
+    config.setSGP30Available(false);
+    config.setSHT31Available(false);
     
-    // Initialize I2C
-    Wire.begin(sdaPin, sclPin);
+    // Make sure I2C is initialized for the sensors
+    if (!Wire.begin(I2C_SDA, I2C_SCL)) {
+        Serial.println("[ERROR] Failed to initialize I2C for sensors");
+        return;
+    }
     
-    // Check if SGP30 is enabled in config
-    if (config.isSGP30Enabled()) {
-        if (!sgp.begin()) {
-            Serial.println("SGP30 sensor not found");
-            config.setSGP30Available(false);
-        } else {
-            Serial.println("SGP30 sensor initialized");
+    // Set I2C clock to 100kHz for better stability with sensors
+    Wire.setClock(100000);
+    
+    // Initialize SGP30 air quality sensor
+    bool sgp30_success = false;
+    try {
+        Serial.println("[INFO] Initializing SGP30 sensor...");
+        if (sgp.begin()) {
+            // Initialize IAQ algorithm baselines
+            Serial.println("[INFO] SGP30 init success - setting up baselines");
+            sgp.setIAQBaseline(0x8E68, 0x8F41); // Use default values
+            sgp30_success = true;
             config.setSGP30Available(true);
-        }
-    } else {
-        Serial.println("SGP30 sensor disabled in config");
-        config.setSGP30Available(false);
-    }
-    
-    // Check if SHT31 is enabled in config
-    if (config.isSHT31Enabled()) {
-        uint8_t sht31Address = config.getSHT31I2CAddress();
-        if (!sht31.begin(sht31Address)) {
-            Serial.println("SHT31 sensor not found");
-            config.setSHT31Available(false);
         } else {
-            Serial.println("SHT31 sensor initialized");
-            config.setSHT31Available(true);
-            
-            // Configure SHT31 settings from config
-            sht31.heater(config.isSHT31HeaterEnabled());
-            
-            // Set SHT31 resolution if supported
-            #ifdef SHT31_DISPLAY_RESOLUTION
-            sht31.setResolution(SHT31_MS);
-            #endif
+            Serial.println("[ERROR] SGP30 sensor initialization failed");
         }
-    } else {
-        Serial.println("SHT31 sensor disabled in config");
-        config.setSHT31Available(false);
+    } catch (const std::exception& e) {
+        Serial.printf("[ERROR] Exception during SGP30 init: %s\n", e.what());
+    } catch (...) {
+        Serial.println("[ERROR] Unknown exception during SGP30 init");
     }
     
-    // If both sensors are available, set SGP30 environmental data
-    if (config.isSHT31Available() && config.isSGP30Available()) {
-        // Read initial temperature and humidity to set SGP30 environmental data
-        float temperature = sht31.readTemperature();
-        float humidity = sht31.readHumidity();
-        
-        if (!isnan(temperature) && !isnan(humidity)) {
-            // Convert to fixed point 8.8 format (in g/m^3)
-            uint16_t absoluteHumidity = (uint16_t)(1000.0 * 256.0 * (6.112 * exp((17.67 * temperature) / (temperature + 243.5)) * humidity * 2.1674) / (273.15 + temperature));
-            sgp.setHumidity(absoluteHumidity);
-            Serial.println("SGP30 environmental data set from SHT31");
+    // Initialize SHT31 temperature and humidity sensor
+    bool sht31_success = false;
+    try {
+        Serial.println("[INFO] Initializing SHT31 sensor...");
+        if (sht31.begin(0x44)) { // 0x44 is the default I2C address
+            Serial.println("[INFO] SHT31 sensor initialized successfully");
+            sht31_success = true;
+            config.setSHT31Available(true);
+        } else {
+            Serial.println("[ERROR] SHT31 sensor initialization failed");
         }
+    } catch (const std::exception& e) {
+        Serial.printf("[ERROR] Exception during SHT31 init: %s\n", e.what());
+    } catch (...) {
+        Serial.println("[ERROR] Unknown exception during SHT31 init");
     }
+    
+    // Report sensor initialization results
+    Serial.printf("[INFO] Sensor initialization complete: SGP30=%s, SHT31=%s\n", 
+                 sgp30_success ? "AVAILABLE" : "UNAVAILABLE",
+                 sht31_success ? "AVAILABLE" : "UNAVAILABLE");
 }
 
 void audio_init() {
@@ -695,9 +740,8 @@ void update_display_task(void *parameter) {
     unsigned long previousTimeUpdate = 0;
     String lastDisplayedTime = "";
     
-    // Variables for touch handling
+    // Use global touch handling variable
     bool lastTouched = false;
-    uint32_t touchStartTime = 0;
     
     // Variables for WiFi status updates
     uint32_t lastWifiStatusUpdate = 0;
@@ -736,7 +780,10 @@ void update_display_task(void *parameter) {
             // Only update if time changed
             if (String(timeString) != lastDisplayedTime) {
                 lastDisplayedTime = timeString;
-                Serial.printf("[DEBUG] Updating time from '%s' to '%s'\n", lastDisplayedTime.c_str(), timeString);
+                // Reduce debug output to prevent serial buffer filling up
+                if (timeinfo.tm_sec == 0) {
+                    Serial.printf("[DEBUG] Updating time to '%s'\n", timeString);
+                }
                 
                 // Update time on display
                 ui.updateTime(timeString);
@@ -756,6 +803,9 @@ void update_display_task(void *parameter) {
                     Serial.printf("Setting date: %s\n", dateString);
                     ui.updateDate(dateString);
                     firstUpdate = false;
+                    
+                    // Yield to other tasks after intensive operations
+                    vTaskDelay(pdMS_TO_TICKS(1));
                 }
             }
         }
@@ -833,11 +883,18 @@ void update_sensors_task(void *parameter) {
                     sgp.setHumidity(absoluteHumidity);
                 }
                 
-                // Debug output
-                Serial.printf("Temperature: %.1f°C, Humidity: %.1f%%\n", temperature, humidity);
+                // Debug output - only print every minute to reduce serial buffer load
+                static uint32_t lastTempDebugPrint = 0;
+                if (currentTime - lastTempDebugPrint > 60000) { // Once per minute
+                    Serial.printf("Temperature: %.1f°C, Humidity: %.1f%%\n", temperature, humidity);
+                    lastTempDebugPrint = currentTime;
+                }
             }
             
             lastSHT31Read = currentTime;
+            
+            // Yield to other tasks after intensive I2C operations
+            vTaskDelay(pdMS_TO_TICKS(1));
         }
         
         // Read SGP30 sensor (TVOC and eCO2) if enabled and time has passed
@@ -850,11 +907,18 @@ void update_sensors_task(void *parameter) {
                 ui.updateTVOC(tvoc);
                 ui.updateCO2(eco2);
                 
-                // Debug output
-                Serial.printf("TVOC: %d ppb, eCO2: %d ppm\n", tvoc, eco2);
+                // Debug output - only print every minute to reduce serial buffer load
+                static uint32_t lastSgpDebugPrint = 0;
+                if (currentTime - lastSgpDebugPrint > 60000) { // Once per minute
+                    Serial.printf("TVOC: %d ppb, eCO2: %d ppm\n", tvoc, eco2);
+                    lastSgpDebugPrint = currentTime;
+                }
             }
             
             lastSGP30Read = currentTime;
+            
+            // Yield to other tasks after intensive I2C operations
+            vTaskDelay(pdMS_TO_TICKS(1));
         }
         
         // Small delay to prevent task from hogging CPU

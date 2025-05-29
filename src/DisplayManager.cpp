@@ -1,5 +1,6 @@
 #include "DisplayManager.h"
 #include "UIManager.h"
+#include "Globals.h"
 #include <Arduino.h>
 #include <SPI.h>
 #include <Wire.h>
@@ -13,12 +14,13 @@ class UIManager;
 #include "esp_lcd_panel_rgb.h"  // For RGB panel-specific functions
 #endif
 #include <lvgl.h>
-#include <TAMC_GT911.h>
+// Use our SafeTouchController instead of TAMC_GT911
+#include "SafeTouchController.h"
 #include <Arduino_GFX_Library.h>
 #include "DisplayConfig.h"
 
 // Global touch controller instance for LVGL
-TAMC_GT911* DisplayManager::touch_controller = nullptr;
+SafeTouchController* DisplayManager::touch_controller = nullptr;
 
 // Initialize static members
 lv_color_t* DisplayManager::lv_display_buf1 = nullptr;
@@ -28,7 +30,7 @@ int16_t DisplayManager::touch_last_x = 0;
 int16_t DisplayManager::touch_last_y = 0;
 
 DisplayManager::DisplayManager() 
-    : bus(nullptr), gfx(nullptr), touch(nullptr),
+    : bus(nullptr), gfx(nullptr), safe_touch(nullptr),
       disp(nullptr), indev_touch(nullptr),
       currentBrightness(80),  // Default to 80% brightness
       touch_initialized(false)
@@ -48,11 +50,11 @@ void DisplayManager::performHardwareReset() {
     }
     delay(100);
     
-    // Reset I2C for touch controller with more delay to ensure stability
-    Wire.end();
-    delay(100); // Longer delay
-    Wire.begin(TOUCH_GT911_SDA, TOUCH_GT911_SCL);
-    delay(100); // Longer delay after starting I2C
+    // Reset I2C for touch controller using our more robust I2C management function
+    resetI2C(TOUCH_GT911_SDA, TOUCH_GT911_SCL);
+    
+    // Allow time for I2C to stabilize
+    delay(100);
     
     Serial.println("Hardware reset completed");
 }
@@ -97,8 +99,8 @@ bool DisplayManager::begin() {
     
     // Log touch status for debugging
     Serial.printf("Touch status: %s\n", touch_initialized ? "ENABLED" : "DISABLED");
-    if (touch_initialized && touch) {
-        Serial.printf("Touch controller addr: 0x%p\n", touch);
+    if (touch_initialized && safe_touch) {
+        Serial.printf("Touch controller addr: 0x%p\n", safe_touch);
     }
     
     Serial.println("DisplayManager initialized successfully");
@@ -159,62 +161,68 @@ bool DisplayManager::initDisplay() {
     // Clear the screen with black color
     gfx->fillScreen(BLACK);
     
-    // Configure backlight pin
-    pinMode(TFT_BL, OUTPUT);
-    digitalWrite(TFT_BL, LOW);  // Turn on backlight (active LOW)
+    // Configure backlight pin only if it's valid
+    if (TFT_BL >= 0 && TFT_BL < 48) {
+        pinMode(TFT_BL, OUTPUT);
+        digitalWrite(TFT_BL, LOW);  // Turn on backlight (active LOW)
+        Serial.printf("Backlight pin %d configured\n", TFT_BL);
+    } else {
+        Serial.println("Backlight control disabled - skipping pin configuration");
+    }
     
     Serial.println("Display initialized successfully");
     return true;
 }
 
 bool DisplayManager::initTouch() {
-    Serial.println("Initializing touch controller with safe approach...");
+    Serial.println("Initializing touch controller with safe implementation...");
     
-    // Free any existing touch instance
-    if (touch != nullptr) {
-        delete touch;
-        touch = nullptr;
+    // Free any existing touch instances
+    if (safe_touch != nullptr) {
+        delete safe_touch;
+        safe_touch = nullptr;
     }
     
-    // Add longer delays to ensure hardware stability
-    delay(100);
+    if (touch_controller != nullptr) {
+        delete touch_controller;
+        touch_controller = nullptr;
+    }
     
-    // Try to create the touch controller
-    try {
-        touch = new TAMC_GT911(TOUCH_GT911_SDA, TOUCH_GT911_SCL, TOUCH_GT911_INT, TOUCH_GT911_RST, SCREEN_WIDTH, SCREEN_HEIGHT);
-        
-        if (!touch) {
-            Serial.println("Failed to allocate memory for touch controller");
-            return false;
-        }
-        
-        // Extra delay to ensure hardware is ready
-        delay(100);
-        
-        // Call begin() - note that this returns void, not bool
-        touch->begin();
-        delay(100); // Give it time to initialize
-        
-        // Manually check if touch is working by reading a value
-        touch->read();
-        if (touch->touches == 0) { // If reading succeeded, we should at least have valid touch count
-            Serial.println("Touch controller initialized successfully");
-            touch_initialized = true;
-            Serial.printf("  Resolution: %dx%d\n", SCREEN_WIDTH, SCREEN_HEIGHT);
-            Serial.printf("  Rotation: %d\n", TOUCH_ROTATION);
-            return true;
-        } else {
-            Serial.println("Touch controller might not be working properly");
-            // Continue anyway as this is a soft failure
-            touch_initialized = true;
-            return true;
-        }
-    } catch (...) {
-        Serial.println("Exception during touch initialization - continuing without touch");
-        if (touch) {
-            delete touch;
-            touch = nullptr;
-        }
+    // Create our safer touch controller instances
+    // One for the DisplayManager instance and one static for callbacks
+    safe_touch = new SafeTouchController(
+        TOUCH_GT911_SDA, 
+        TOUCH_GT911_SCL, 
+        TOUCH_GT911_RST, 
+        SCREEN_WIDTH, 
+        SCREEN_HEIGHT);
+    
+    // Create the static instance for LVGL callbacks
+    touch_controller = new SafeTouchController(
+        TOUCH_GT911_SDA, 
+        TOUCH_GT911_SCL, 
+        TOUCH_GT911_RST, 
+        SCREEN_WIDTH, 
+        SCREEN_HEIGHT);
+    
+    if (!safe_touch || !touch_controller) {
+        Serial.println("Failed to allocate memory for safe touch controller");
+        touch_initialized = false;
+        return false;
+    }
+    
+    // Initialize the touch controllers using our safe wrapper
+    bool success1 = safe_touch->begin();
+    bool success2 = touch_controller->begin();
+    bool success = success1 && success2;
+    
+    if (success) {
+        Serial.println("Safe touch controller initialized successfully");
+        touch_initialized = true;
+        return true;
+    } else {
+        Serial.println("Failed to initialize safe touch controller");
+        touch_initialized = false;
         return false;
     }
 }
@@ -281,7 +289,7 @@ bool DisplayManager::initLVGL() {
     // The refresh rate is controlled by the lv_timer_handler() call frequency in the update() method
     
     // Touch input only if available
-    if (touch_initialized && touch) {
+    if (touch_initialized && safe_touch) {
         lv_indev_drv_init(&indev_drv);
         indev_drv.type = LV_INDEV_TYPE_POINTER;
         indev_drv.read_cb = lvgl_touchpad_read;
@@ -313,9 +321,10 @@ void DisplayManager::setBrightness(uint8_t brightness) {
     
     currentBrightness = brightness;
     
-    // Only proceed if backlight pin is valid
+    // Only proceed if backlight pin is valid and in the proper range for ESP32-S3
+    // ESP32-S3 has GPIO pins 0-48, and pin must be positive
     if (TFT_BL < 0 || TFT_BL >= 48) {
-        Serial.println("Cannot set brightness - backlight pin is invalid");
+        Serial.println("Cannot set brightness - backlight pin is invalid or disabled");
         return;
     }
     
@@ -341,39 +350,49 @@ void DisplayManager::setBrightness(uint8_t brightness) {
         ledcWrite(BACKLIGHT_PWM_CHANNEL, pwmValue);
         Serial.printf("Display brightness set to %d%% (PWM: %d)\n", brightness, pwmValue);
     } catch (...) {
-        Serial.println("Failed to set brightness via PWM");
+        Serial.println("Error setting display brightness");
     }
 }
 
 void DisplayManager::update() {
     // Process touch events if touch is initialized
-    if (touch_initialized && touch) {
+    if (touch_initialized && safe_touch) {
+        static uint32_t lastTouchCheck = 0;
         static bool lastTouchState = false;
         static uint32_t touchStartTime = 0;
         static uint32_t touchEndTime = 0;
         
-        // Check if enough time has passed since last touch check to avoid too frequent polling
+        // Handle touch input if touch controller is active
         uint32_t now = millis();
-        if (now - lastTouchCheck > 20) { // 50Hz touch polling
+        
+        // Check touch at a reasonable rate (every 20ms = 50Hz)
+        if (now - lastTouchCheck >= 20) {
+            // Try to read touch data - this uses our safer implementation
+            safe_touch->read();
             lastTouchCheck = now;
             
             // Get current touch state
-            bool currentTouchState = isTouched();
+            bool currentTouchState = safe_touch->isTouched();
             
             // Process touch state changes
             if (currentTouchState != lastTouchState) {
                 if (currentTouchState) {
                     // Touch started
                     touchStartTime = now;
-                    Serial.printf("Touch started at X:%d Y:%d\n", touch_last_x, touch_last_y);
+                    Serial.printf("Touch started at X:%d Y:%d\n", safe_touch->x, safe_touch->y);
                     
-                    // Update the global lastTouchTime to track user interaction for screen timeout
-                    extern unsigned long lastTouchTime;
-                    lastTouchTime = now;
+                    // Update static variables for LVGL
+                    touch_last_x = safe_touch->x;
+                    touch_last_y = safe_touch->y;
+                    touch_has_signal = true;
+                    
+                    // Update the global touch time to track user interaction for screen timeout
+                    g_last_touch_time = now;
                 } else {
                     // Touch ended
                     touchEndTime = now;
                     uint32_t touchDuration = touchEndTime - touchStartTime;
+                    touch_has_signal = false;
                     
                     // Detect tap (short touch duration)
                     if (touchDuration < 300) {
@@ -400,12 +419,12 @@ void DisplayManager::update() {
 }
 
 bool DisplayManager::isTouched() {
-    if (!touch || !touch_initialized) {
+    if (!safe_touch || !touch_initialized) {
         return false;
     }
     
-    // Use the GT911 touch controller's touches property
-    return touch->touches > 0;
+    // Use our new safe touch controller's isTouched method
+    return safe_touch->isTouched();
 }
 
 // LVGL display flush callback
@@ -445,12 +464,27 @@ void DisplayManager::lvgl_flush_cb(lv_disp_drv_t *disp, const lv_area_t *area, l
 void DisplayManager::lvgl_touchpad_read(lv_indev_drv_t *indev_driver, lv_indev_data_t *data) {
     static bool reported_touch = false;
     
+    // Using the static touch_controller instead of instance members
+    // Check if touch controller is properly initialized
+    if (!touch_controller) {
+        data->state = LV_INDEV_STATE_REL;
+        return;
+    }
+    
+    // Read the latest touch state
+    touch_controller->read();
+    
     // Check if touch is active
-    if (touch_has_signal) {
-        // Set the touch coordinates from the static variables
+    if (touch_controller->isTouched()) {
+        // Set the touch coordinates
         data->state = LV_INDEV_STATE_PR;
-        data->point.x = touch_last_x;
-        data->point.y = touch_last_y;
+        data->point.x = touch_controller->x;
+        data->point.y = touch_controller->y;
+        
+        // Update the static variables for other parts of the code
+        touch_has_signal = true;
+        touch_last_x = touch_controller->x;
+        touch_last_y = touch_controller->y;
         
         // Only log once per touch to avoid spamming the console
         if (!reported_touch) {
@@ -460,6 +494,7 @@ void DisplayManager::lvgl_touchpad_read(lv_indev_drv_t *indev_driver, lv_indev_d
     } else {
         // Touch released
         data->state = LV_INDEV_STATE_REL;
+        touch_has_signal = false;
         
         // Only log release once
         if (reported_touch) {

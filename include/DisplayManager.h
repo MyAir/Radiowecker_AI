@@ -3,12 +3,12 @@
 #include <Arduino.h>
 #include <Arduino_GFX_Library.h>
 #include <lvgl.h>
-#include <TAMC_GT911.h>
+#include "SafeTouchController.h"  // Using our custom safe implementation
 #include <Wire.h>
 #include "DisplayConfig.h"
 
 // Forward declarations
-class TAMC_GT911;
+class SafeTouchController;
 class Arduino_ESP32RGBPanel;
 class Arduino_RGB_Display;
 
@@ -62,13 +62,13 @@ public:
     
     // Getters
     Arduino_GFX* getGfx() { return gfx; }
-    TAMC_GT911* getTouch() { return touch; }
+    SafeTouchController* getTouch() { return safe_touch; }
     
     /**
      * @brief Check if touch controller is initialized and working
      * @return true if touch controller is working, false otherwise
      */
-    bool isTouchWorking() const { return touch != nullptr && touch_initialized; }
+    bool isTouchWorking() const { return safe_touch != nullptr && touch_initialized; }
 
 private:
     ~DisplayManager() = default;
@@ -79,7 +79,7 @@ private:
     // Display and touch instances
     Arduino_ESP32RGBPanel *bus = nullptr;
     Arduino_GFX *gfx = nullptr; // Using the base class to allow for different display implementations
-    TAMC_GT911 *touch = nullptr;
+    SafeTouchController *safe_touch = nullptr;
     bool touch_initialized = false;
 
     // Display buffer
@@ -108,8 +108,8 @@ private:
     static constexpr uint8_t BACKLIGHT_PWM_RESOLUTION = 8;    // 8-bit resolution (0-255)
     bool pwmSetup = false;
     
-    // Touch controller instance
-    static TAMC_GT911* touch_controller;
+    // Touch controller static instance for callbacks
+    static SafeTouchController* touch_controller;
     
     // Current brightness (0-100)
     uint8_t currentBrightness;
