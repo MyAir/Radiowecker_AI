@@ -1,5 +1,23 @@
 # Radiowecker AI Changelog
 
+## [1.2.0] - 2025-05-30
+
+### Added
+- Ultra-minimal memory-efficient approach for parsing hourly weather forecasts
+- Improved debug output for weather forecast processing
+- Detailed timestamp logs for hourly weather data
+
+### Fixed
+- Resolved memory issues in the hourly weather data processing
+- Fixed structural code issues in WeatherService.cpp
+- Ensured proper JSON navigation and parsing for OpenWeatherMap API
+
+### Technical Details
+- New approach processes one hourly forecast entry at a time to minimize memory usage
+- Uses string methods for basic JSON navigation instead of loading entire response at once
+- Implements focused JSON document filters to extract only necessary data
+- Resolves NoMemory errors that were preventing proper forecast display
+
 ## [1.1.0] - 2025-05-29
 
 ### Added
