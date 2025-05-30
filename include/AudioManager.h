@@ -7,7 +7,7 @@
 #include "AudioFileSourceBuffer.h"
 #include "AudioGeneratorMP3.h"
 #include "AudioFileSourceHTTPStream.h"
-#include <SD_MMC.h>
+#include <SD.h> // Changed from SD_MMC.h to fix initialization errors
 
 // Forward declarations
 class AudioGenerator;

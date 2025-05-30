@@ -1093,7 +1093,7 @@ void UIManager::createHomeScreen() {
     
     // Create forecast panel within the weather panel
     forecastPanel = lv_obj_create(weatherPanel);
-    lv_obj_set_size(forecastPanel, 190, 290); // Taller panel for vertical layout, almost width of parent
+    lv_obj_set_size(forecastPanel, 190, 250); // Reduced height to fit better below current weather
     lv_obj_align(forecastPanel, LV_ALIGN_BOTTOM_MID, 0, -5);  // Closer to bottom
     lv_obj_set_style_bg_color(forecastPanel, lv_color_hex(0x333333), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(forecastPanel, LV_OPA_50, LV_PART_MAIN);
@@ -1102,12 +1102,12 @@ void UIManager::createHomeScreen() {
     lv_obj_set_style_radius(forecastPanel, 5, LV_PART_MAIN);
     lv_obj_set_style_pad_all(forecastPanel, 4, LV_PART_MAIN);  // Slightly less padding
     
-    // Setup a horizontal layout for the forecast panel to use space more efficiently
+    // Setup a more compact layout for the forecast panel
     
     // Add divider line between morning and afternoon forecasts
     lv_obj_t* dividerLine = lv_obj_create(forecastPanel);
     lv_obj_set_size(dividerLine, 170, 2);  // Nearly full width, 2px height
-    lv_obj_align(dividerLine, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_align(dividerLine, LV_ALIGN_CENTER, 0, -5);  // Moved slightly up to allow more space below
     lv_obj_set_style_bg_color(dividerLine, lv_color_hex(0x666666), LV_PART_MAIN);
     lv_obj_set_style_border_width(dividerLine, 0, LV_PART_MAIN);
     lv_obj_set_style_radius(dividerLine, 0, LV_PART_MAIN);
@@ -1116,13 +1116,13 @@ void UIManager::createHomeScreen() {
     morningTitle = lv_label_create(forecastPanel);
     lv_obj_add_style(morningTitle, &infoStyle, 0);
     lv_label_set_text(morningTitle, "Vormittag");
-    lv_obj_align(morningTitle, LV_ALIGN_TOP_MID, 0, 5);
+    lv_obj_align(morningTitle, LV_ALIGN_TOP_MID, 0, 2);  // Reduced top margin
     
     // Create a container for the morning forecast icon
     lv_obj_t* morningIconContainer = lv_obj_create(forecastPanel);
     lv_obj_remove_style_all(morningIconContainer);
     lv_obj_set_size(morningIconContainer, 40, 40);
-    lv_obj_align(morningIconContainer, LV_ALIGN_TOP_MID, 0, 30);
+    lv_obj_align(morningIconContainer, LV_ALIGN_TOP_MID, 0, 22);  // Reduced spacing
     
     // Create the label (fallback)
     morningIcon = lv_label_create(morningIconContainer);
@@ -1136,24 +1136,24 @@ void UIManager::createHomeScreen() {
     morningTempLabel = lv_label_create(forecastPanel);
     lv_obj_add_style(morningTempLabel, &infoStyle, 0);
     lv_label_set_text(morningTempLabel, "--°C");
-    lv_obj_align(morningTempLabel, LV_ALIGN_TOP_MID, 0, 75);
+    lv_obj_align(morningTempLabel, LV_ALIGN_TOP_MID, 0, 65);  // Moved up
     
     morningRainLabel = lv_label_create(forecastPanel);
     lv_obj_add_style(morningRainLabel, &infoStyle, 0);
     lv_label_set_text(morningRainLabel, "☔ --%");
-    lv_obj_align(morningRainLabel, LV_ALIGN_TOP_MID, 0, 95);
+    lv_obj_align(morningRainLabel, LV_ALIGN_TOP_MID, 0, 85);  // Moved up
     
     // Afternoon title - in bottom half
     afternoonTitle = lv_label_create(forecastPanel);
     lv_obj_add_style(afternoonTitle, &infoStyle, 0);
     lv_label_set_text(afternoonTitle, "Nachmittag");
-    lv_obj_align(afternoonTitle, LV_ALIGN_TOP_MID, 0, 155);
+    lv_obj_align(afternoonTitle, LV_ALIGN_TOP_MID, 0, 130);  // Moved up
     
     // Create a container for the afternoon forecast icon
     lv_obj_t* afternoonIconContainer = lv_obj_create(forecastPanel);
     lv_obj_remove_style_all(afternoonIconContainer);
     lv_obj_set_size(afternoonIconContainer, 40, 40);
-    lv_obj_align(afternoonIconContainer, LV_ALIGN_TOP_MID, 0, 180);
+    lv_obj_align(afternoonIconContainer, LV_ALIGN_TOP_MID, 0, 150);  // Moved up
     
     // Create the label (fallback)
     afternoonIcon = lv_label_create(afternoonIconContainer);
@@ -1167,12 +1167,12 @@ void UIManager::createHomeScreen() {
     afternoonTempLabel = lv_label_create(forecastPanel);
     lv_obj_add_style(afternoonTempLabel, &infoStyle, 0);
     lv_label_set_text(afternoonTempLabel, "--°C");
-    lv_obj_align(afternoonTempLabel, LV_ALIGN_TOP_MID, 0, 225);
+    lv_obj_align(afternoonTempLabel, LV_ALIGN_TOP_MID, 0, 193);  // Moved up
     
     afternoonRainLabel = lv_label_create(forecastPanel);
     lv_obj_add_style(afternoonRainLabel, &infoStyle, 0);
     lv_label_set_text(afternoonRainLabel, "☔ --%");
-    lv_obj_align(afternoonRainLabel, LV_ALIGN_TOP_MID, 0, 245);
+    lv_obj_align(afternoonRainLabel, LV_ALIGN_TOP_MID, 0, 213);  // Moved up
     
     lv_obj_set_grid_dsc_array(sensorPanel, col_dsc, row_dsc);
     lv_obj_set_style_pad_all(sensorPanel, 5, LV_PART_MAIN);  // Keep reduced padding

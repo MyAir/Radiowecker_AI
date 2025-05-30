@@ -30,10 +30,11 @@ void AudioManager::begin() {
     audioOutput = new AudioOutputI2S();
     audioOutput->SetGain(currentVolume / 100.0);
     
-    // Initialize SD_MMC if not already done
-    if (!SD_MMC.begin("/sdcard", true, true)) {
-        Serial.println("SD_MMC initialization failed!");
-        // Continue without SD card support
+    // Use regular SD card which was already initialized in main.cpp
+    // SD_MMC replaced with SD to fix initialization errors
+    if (!SD.begin(SD_CS)) {
+        Serial.println("SD initialization check failed in AudioManager!");
+        // Continue anyway as SD might already be initialized
     }
 }
 
