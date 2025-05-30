@@ -1,5 +1,15 @@
 # Radiowecker AI Changelog
 
+## [1.2.1] - 2025-05-30
+
+### Changed
+- Improved status bar update frequency from 30 seconds to 10 seconds
+- Verified OpenWeatherMap API query frequency is correctly set to 5 minutes
+
+### Technical Details
+- Modified update_display_task to refresh WiFi status, IP address, and signal quality every 10 seconds
+- Confirmed WeatherService updateInterval is set to 300000ms (5 minutes) as required
+
 ## [1.2.0] - 2025-05-30
 
 ### Added

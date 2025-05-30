@@ -745,7 +745,7 @@ void update_display_task(void *parameter) {
     
     // Variables for WiFi status updates
     uint32_t lastWifiStatusUpdate = 0;
-    const uint32_t WIFI_STATUS_UPDATE_INTERVAL = 30000; // Update every 30 seconds to reduce flicker
+    const uint32_t WIFI_STATUS_UPDATE_INTERVAL = 10000; // Update every 10 seconds
     
     // German weekday names
     String weekdays_de[] = {"Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"};
@@ -968,18 +968,20 @@ void update_weather_task(void *parameter) {
             current.weather_icon.c_str()
         );
         
-        // Update morning forecast (using morning temp from today's forecast)
+        // Update morning forecast (using our new hourly-based morning forecast)
+        const WeatherService::ForecastSummary& morning = weatherService.getMorningForecast();
         ui.updateMorningForecast(
-            today.temp.morn,
-            today.pop,
-            today.weather_icon.c_str()
+            morning.avgTemp,
+            morning.avgPop,
+            morning.iconCode.c_str()
         );
         
-        // Update afternoon forecast (using day temp from today's forecast)
+        // Update afternoon forecast (using our new hourly-based afternoon forecast)
+        const WeatherService::ForecastSummary& afternoon = weatherService.getAfternoonForecast();
         ui.updateAfternoonForecast(
-            today.temp.day,
-            today.pop,
-            today.weather_icon.c_str()
+            afternoon.avgTemp,
+            afternoon.avgPop,
+            afternoon.iconCode.c_str()
         );
     }
     
@@ -1000,18 +1002,20 @@ void update_weather_task(void *parameter) {
                 current.weather_icon.c_str()
             );
             
-            // Update morning forecast (using morning temp from today's forecast)
+            // Update morning forecast (using our new hourly-based morning forecast)
+            const WeatherService::ForecastSummary& morning = weatherService.getMorningForecast();
             ui.updateMorningForecast(
-                today.temp.morn,
-                today.pop,
-                today.weather_icon.c_str()
+                morning.avgTemp,
+                morning.avgPop,
+                morning.iconCode.c_str()
             );
             
-            // Update afternoon forecast (using day temp from today's forecast)
+            // Update afternoon forecast (using our new hourly-based afternoon forecast)
+            const WeatherService::ForecastSummary& afternoon = weatherService.getAfternoonForecast();
             ui.updateAfternoonForecast(
-                today.temp.day,
-                today.pop,
-                today.weather_icon.c_str()
+                afternoon.avgTemp,
+                afternoon.avgPop,
+                afternoon.iconCode.c_str()
             );
             
             Serial.println("[INFO] Weather UI updated successfully");
