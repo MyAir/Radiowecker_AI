@@ -357,9 +357,16 @@ void UIManager::updateWifiQuality(int quality) {
 }
 
 void UIManager::updateCurrentWeather(float temp, float feels_like, const char* description, const char* iconCode) {
+    // Check if UI elements exist
     if (!currentTempLabel || !feelsLikeLabel || !weatherDescLabel || !weatherIcon) {
         Serial.println("[ERROR] Weather UI elements not initialized!");
         return;
+    }
+    
+    // Validate input parameters
+    if (!description) {
+        Serial.println("[WARN] Weather description is null, using empty string");
+        description = "";
     }
     
     // Update temperature
@@ -395,16 +402,25 @@ void UIManager::updateCurrentWeather(float temp, float feels_like, const char* d
         }
         
         // Get the parent of the weather icon
-        lv_obj_t* parent = lv_obj_get_parent(weatherIcon);
+        lv_obj_t* parent = nullptr;
+        if (weatherIcon) {
+            parent = lv_obj_get_parent(weatherIcon);
+        }
+        
         if (!parent) {
             parent = lv_scr_act();
+            Serial.println("[WARN] Using screen as parent for weather icon");
         }
         
         // Create a new weather icon with proper transparency handling
         weatherIconImg = create_weather_icon(parent, iconCode);
         if (weatherIconImg) {
             // Position the icon where the text icon was
-            lv_obj_align_to(weatherIconImg, weatherIcon, LV_ALIGN_CENTER, 0, 0);
+            if (weatherIcon) {
+                lv_obj_align_to(weatherIconImg, weatherIcon, LV_ALIGN_CENTER, 0, 0);
+            } else {
+                lv_obj_align(weatherIconImg, LV_ALIGN_CENTER, 0, 0);
+            }
             lv_obj_clear_flag(weatherIconImg, LV_OBJ_FLAG_HIDDEN);
             
             // Ensure the parent has no background
@@ -414,17 +430,17 @@ void UIManager::updateCurrentWeather(float temp, float feels_like, const char* d
             lv_obj_set_style_pad_all(parent, 0, 0);
         } else {
             // Fall back to using a direct image object
+            Serial.println("[WARN] Failed to create weather icon, using fallback");
             if (weatherIcon) {
-                // Hide text label
-                lv_obj_add_flag(weatherIcon, LV_OBJ_FLAG_HIDDEN);
-                
-                // Create image if needed
-                if (weatherIconImg == nullptr) {
-                    weatherIconImg = lv_img_create(lv_obj_get_parent(weatherIcon));
-                    lv_img_set_src(weatherIconImg, &icon_02d);
-                    lv_obj_align_to(weatherIconImg, weatherIcon, LV_ALIGN_CENTER, 0, 0);
+                lv_obj_t* icon_parent = lv_obj_get_parent(weatherIcon);
+                if (icon_parent) {
+                    weatherIconImg = lv_img_create(icon_parent);
+                    if (weatherIconImg) {
+                        lv_img_set_src(weatherIconImg, &icon_02d);
+                        lv_obj_align_to(weatherIconImg, weatherIcon, LV_ALIGN_CENTER, 0, 0);
+                        lv_obj_clear_flag(weatherIconImg, LV_OBJ_FLAG_HIDDEN);
+                    }
                 }
-                lv_obj_clear_flag(weatherIconImg, LV_OBJ_FLAG_HIDDEN);
             }
         }
     } else if (weatherIcon) {
@@ -434,24 +450,40 @@ void UIManager::updateCurrentWeather(float temp, float feels_like, const char* d
         
         // Create or show image
         if (weatherIconImg == nullptr) {
-            weatherIconImg = lv_img_create(lv_obj_get_parent(weatherIcon));
-            lv_img_set_src(weatherIconImg, &icon_02d);
-            lv_obj_align_to(weatherIconImg, weatherIcon, LV_ALIGN_CENTER, 0, 0);
+            lv_obj_t* icon_parent = lv_obj_get_parent(weatherIcon);
+            if (icon_parent) {
+                weatherIconImg = lv_img_create(icon_parent);
+                if (weatherIconImg) {
+                    lv_img_set_src(weatherIconImg, &icon_02d);
+                    lv_obj_align_to(weatherIconImg, weatherIcon, LV_ALIGN_CENTER, 0, 0);
+                    lv_obj_clear_flag(weatherIconImg, LV_OBJ_FLAG_HIDDEN);
+                }
+            }
+        } else {
+            lv_obj_clear_flag(weatherIconImg, LV_OBJ_FLAG_HIDDEN);
         }
-        lv_obj_clear_flag(weatherIconImg, LV_OBJ_FLAG_HIDDEN);
     }
     
     Serial.printf("[INFO] Updated current weather: %.1f°C, Gefühlt: %.1f°C, %s\n", 
                  temp, feels_like, description);
                  
     // Force refresh
-    lv_obj_invalidate(weatherPanel);
+    if (weatherPanel) {
+        lv_obj_invalidate(weatherPanel);
+    }
 }
 
 void UIManager::updateMorningForecast(float temp, float pop, const char* iconCode) {
+    // Check if UI elements exist
     if (!morningTempLabel || !morningRainLabel || !morningIcon) {
         Serial.println("[ERROR] Morning forecast UI elements not initialized!");
         return;
+    }
+    
+    // Validate input parameters
+    if (!iconCode) {
+        Serial.println("[WARN] Morning forecast icon code is null");
+        // Continue execution, we'll handle this later
     }
     
     // Update temperature
@@ -481,40 +513,45 @@ void UIManager::updateMorningForecast(float temp, float pop, const char* iconCod
             lv_obj_add_flag(morningIcon, LV_OBJ_FLAG_HIDDEN);
         }
         
-        // Remove old icon if it exists
-        if (morningIconImg) {
-            lv_obj_del(morningIconImg);
-            morningIconImg = nullptr;
-        }
-        
-        // Hide the text icon
+        // Create a new weather icon with proper parent
+        lv_obj_t* parent = nullptr;
         if (morningIcon) {
-            lv_obj_add_flag(morningIcon, LV_OBJ_FLAG_HIDDEN);
+            parent = lv_obj_get_parent(morningIcon);
         }
         
-        // Create a new weather icon
-        morningIconImg = create_weather_icon(lv_scr_act(), iconCode);
+        if (!parent) {
+            parent = lv_scr_act();
+            Serial.println("[WARN] Using screen as parent for morning forecast icon");
+        }
+        
+        // Create the new weather icon
+        morningIconImg = create_weather_icon(parent, iconCode);
         if (morningIconImg) {
             // Position and size the icon
             lv_obj_set_size(morningIconImg, 40, 40);
-            lv_obj_align_to(morningIconImg, morningIcon, LV_ALIGN_CENTER, 0, 0);
+            if (morningIcon) {
+                lv_obj_align_to(morningIconImg, morningIcon, LV_ALIGN_CENTER, 0, 0);
+            } else {
+                lv_obj_align(morningIconImg, LV_ALIGN_CENTER, 0, 0);
+            }
             lv_obj_clear_flag(morningIconImg, LV_OBJ_FLAG_HIDDEN);
             
             // Make sure the parent container is transparent
-            lv_obj_set_style_bg_opa(lv_obj_get_parent(morningIconImg), LV_OPA_TRANSP, 0);
+            lv_obj_set_style_bg_opa(parent, LV_OPA_TRANSP, 0);
         } else {
             // Fall back to using the icon_02d image
+            Serial.println("[WARN] Failed to create morning forecast icon, using fallback");
             if (morningIcon) {
-                // Hide text label
-                lv_obj_add_flag(morningIcon, LV_OBJ_FLAG_HIDDEN);
-                
-                // Create image if needed
-                if (morningIconImg == nullptr) {
-                    morningIconImg = lv_img_create(lv_obj_get_parent(morningIcon));
-                    lv_img_set_src(morningIconImg, &icon_02d);
-                    lv_obj_align_to(morningIconImg, morningIcon, LV_ALIGN_CENTER, 0, 0);
+                lv_obj_t* icon_parent = lv_obj_get_parent(morningIcon);
+                if (icon_parent) {
+                    morningIconImg = lv_img_create(icon_parent);
+                    if (morningIconImg) {
+                        lv_img_set_src(morningIconImg, &icon_02d);
+                        lv_obj_set_size(morningIconImg, 40, 40);
+                        lv_obj_align_to(morningIconImg, morningIcon, LV_ALIGN_CENTER, 0, 0);
+                        lv_obj_clear_flag(morningIconImg, LV_OBJ_FLAG_HIDDEN);
+                    }
                 }
-                lv_obj_clear_flag(morningIconImg, LV_OBJ_FLAG_HIDDEN);
             }
         }
     }
@@ -523,20 +560,31 @@ void UIManager::updateMorningForecast(float temp, float pop, const char* iconCod
 }
 
 void UIManager::updateAfternoonForecast(float temp, float pop, const char* iconCode) {
+    // Check if UI elements exist
     if (!afternoonTempLabel || !afternoonRainLabel || !afternoonIcon) {
         Serial.println("[ERROR] Afternoon forecast UI elements not initialized!");
         return;
     }
     
+    // Validate input parameters
+    if (!iconCode) {
+        Serial.println("[WARN] Afternoon forecast icon code is null");
+        // Continue execution, we'll handle this later
+    }
+    
     // Update temperature
     char tempStr[16];
     snprintf(tempStr, sizeof(tempStr), "%.1f°C", temp);
-    lv_label_set_text(afternoonTempLabel, tempStr);
+    if (afternoonTempLabel) {
+        lv_label_set_text(afternoonTempLabel, tempStr);
+    }
     
     // Update rain probability
     char rainStr[16];
     snprintf(rainStr, sizeof(rainStr), "Regen: %.0f%%", pop * 100);
-    lv_label_set_text(afternoonRainLabel, rainStr);
+    if (afternoonRainLabel) {
+        lv_label_set_text(afternoonRainLabel, rainStr);
+    }
     
     // Update weather icon
     if (iconCode) {
@@ -551,40 +599,45 @@ void UIManager::updateAfternoonForecast(float temp, float pop, const char* iconC
             lv_obj_add_flag(afternoonIcon, LV_OBJ_FLAG_HIDDEN);
         }
         
-        // Remove old icon if it exists
-        if (afternoonIconImg) {
-            lv_obj_del(afternoonIconImg);
-            afternoonIconImg = nullptr;
-        }
-        
-        // Hide the text icon
+        // Create a new weather icon with proper parent
+        lv_obj_t* parent = nullptr;
         if (afternoonIcon) {
-            lv_obj_add_flag(afternoonIcon, LV_OBJ_FLAG_HIDDEN);
+            parent = lv_obj_get_parent(afternoonIcon);
         }
         
-        // Create a new weather icon
-        afternoonIconImg = create_weather_icon(lv_scr_act(), iconCode);
+        if (!parent) {
+            parent = lv_scr_act();
+            Serial.println("[WARN] Using screen as parent for afternoon forecast icon");
+        }
+        
+        // Create the new weather icon
+        afternoonIconImg = create_weather_icon(parent, iconCode);
         if (afternoonIconImg) {
             // Position and size the icon
             lv_obj_set_size(afternoonIconImg, 40, 40);
-            lv_obj_align_to(afternoonIconImg, afternoonIcon, LV_ALIGN_CENTER, 0, 0);
+            if (afternoonIcon) {
+                lv_obj_align_to(afternoonIconImg, afternoonIcon, LV_ALIGN_CENTER, 0, 0);
+            } else {
+                lv_obj_align(afternoonIconImg, LV_ALIGN_CENTER, 0, 0);
+            }
             lv_obj_clear_flag(afternoonIconImg, LV_OBJ_FLAG_HIDDEN);
             
             // Make sure the parent container is transparent
-            lv_obj_set_style_bg_opa(lv_obj_get_parent(afternoonIconImg), LV_OPA_TRANSP, 0);
+            lv_obj_set_style_bg_opa(parent, LV_OPA_TRANSP, 0);
         } else {
             // Fall back to using the icon_02d image
+            Serial.println("[WARN] Failed to create afternoon forecast icon, using fallback");
             if (afternoonIcon) {
-                // Hide text label
-                lv_obj_add_flag(afternoonIcon, LV_OBJ_FLAG_HIDDEN);
-                
-                // Create image if needed
-                if (afternoonIconImg == nullptr) {
-                    afternoonIconImg = lv_img_create(lv_obj_get_parent(afternoonIcon));
-                    lv_img_set_src(afternoonIconImg, &icon_02d);
-                    lv_obj_align_to(afternoonIconImg, afternoonIcon, LV_ALIGN_CENTER, 0, 0);
+                lv_obj_t* icon_parent = lv_obj_get_parent(afternoonIcon);
+                if (icon_parent) {
+                    afternoonIconImg = lv_img_create(icon_parent);
+                    if (afternoonIconImg) {
+                        lv_img_set_src(afternoonIconImg, &icon_02d);
+                        lv_obj_set_size(afternoonIconImg, 40, 40);
+                        lv_obj_align_to(afternoonIconImg, afternoonIcon, LV_ALIGN_CENTER, 0, 0);
+                        lv_obj_clear_flag(afternoonIconImg, LV_OBJ_FLAG_HIDDEN);
+                    }
                 }
-                lv_obj_clear_flag(afternoonIconImg, LV_OBJ_FLAG_HIDDEN);
             }
         }
     }

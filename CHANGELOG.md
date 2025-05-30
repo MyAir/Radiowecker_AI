@@ -6,6 +6,11 @@
 - Fixed Guru Meditation crash caused by null pointer dereference when WiFi is unavailable
 - Added fail-safe defaults for weather data when API requests fail
 - Improved memory management in WeatherService to prevent crashes
+- Fixed multiple issues with weather icon handling in UIManager:
+  - Removed duplicate code that attempted to delete icons twice
+  - Fixed parent container references for weather icons
+  - Added additional null checks to prevent crashes
+  - Ensured proper LVGL object creation and deletion
 
 ## [1.2.2] - 2025-05-30
 
