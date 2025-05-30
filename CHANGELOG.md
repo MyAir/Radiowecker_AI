@@ -1,5 +1,12 @@
 # Radiowecker AI Changelog
 
+## [1.2.3] - 2025-05-30
+
+### Fixed
+- Fixed Guru Meditation crash caused by null pointer dereference when WiFi is unavailable
+- Added fail-safe defaults for weather data when API requests fail
+- Improved memory management in WeatherService to prevent crashes
+
 ## [1.2.2] - 2025-05-30
 
 ### Fixed

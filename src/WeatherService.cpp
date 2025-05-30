@@ -322,7 +322,18 @@ bool WeatherService::fetchWeatherData() {
     if (currentSuccess || dailySuccess || hourlySuccess) {
         lastUpdateTime = millis();
         Serial.println("[INFO] Weather data updated successfully");
+        calculateDailyForecasts(); // Only calculate forecasts if we have data
         return true;
+    } else {
+        Serial.println("[WARNING] Initial weather update failed. Will retry later.");
+        // Initialize with safe defaults to prevent crash
+        currentWeather = CurrentWeather();
+        morningForecast = ForecastSummary();
+        afternoonForecast = ForecastSummary();
+        
+        // Set safe default values
+        morningForecast.iconCode = "01d"; // Default sunny
+        afternoonForecast.iconCode = "01d"; // Default sunny
     }
     
     return false;
@@ -559,6 +570,27 @@ void WeatherService::calculateDailyForecasts() {
     Serial.println("[INFO] Calculating daily forecasts from hourly data");
     Serial.printf("[DEBUG] Starting with %d hourly forecast entries\n", hourlyForecastCount);
     
+    // Reset the morning and afternoon forecasts
+    morningForecast = ForecastSummary();
+    afternoonForecast = ForecastSummary();
+    
+    // Safety check - if we have no hourly forecasts, set defaults and return early
+    if (hourlyForecastCount <= 0) {
+        Serial.println("[WARNING] No hourly forecasts available for daily calculation");
+        
+        // Set safe defaults for morning forecast
+        morningForecast.avgTemp = 0;
+        morningForecast.avgPop = 0;
+        morningForecast.iconCode = "01d"; // Default sunny
+        
+        // Set safe defaults for afternoon forecast
+        afternoonForecast.avgTemp = 0;
+        afternoonForecast.avgPop = 0;
+        afternoonForecast.iconCode = "01d"; // Default sunny
+        
+        return;
+    }
+        
     // Get the current time to determine which forecasts to use
     time_t now = time(nullptr);
     struct tm timeinfo;
@@ -593,11 +625,20 @@ void WeatherService::calculateDailyForecasts() {
     Serial.printf("[DEBUG] Time references - Now: %s, Today midnight: %s, Today noon: %s, Tomorrow midnight: %s\n", 
                   nowStr, todayMidnightStr, todayNoonStr, tomorrowMidnightStr);
     
-    // Create an array to track collected forecasts for each period
-    HourlyForecast* morningForecasts = new HourlyForecast[MAX_HOURLY_FORECASTS];
-    HourlyForecast* afternoonForecasts = new HourlyForecast[MAX_HOURLY_FORECASTS];
+    // Allocate arrays for hourly forecasts with safety checks
+    HourlyForecast* morningForecasts = nullptr;
+    HourlyForecast* afternoonForecasts = nullptr;
     int morningCount = 0;
     int afternoonCount = 0;
+    
+    // Only allocate memory if we have forecast data
+    if (hourlyForecastCount > 0) {
+        morningForecasts = new HourlyForecast[hourlyForecastCount];
+        afternoonForecasts = new HourlyForecast[hourlyForecastCount];
+    } else {
+        Serial.println("[WARNING] No hourly forecast data available");
+        return; // Exit early if no data
+    }
     
     // Today's day of month
     int todayDay = timeinfo.tm_mday;
@@ -702,7 +743,7 @@ void WeatherService::calculateDailyForecasts() {
     
     // Calculate morning forecast summary
     Serial.println("[DEBUG] Calculating morning forecast summary");
-    if (morningCount > 0) {
+    if (morningCount > 0 && morningForecasts != nullptr) {
         float totalTemp = 0;
         float totalPop = 0;
         
@@ -739,7 +780,7 @@ void WeatherService::calculateDailyForecasts() {
     
     // Calculate afternoon forecast summary
     Serial.println("[DEBUG] Calculating afternoon forecast summary");
-    if (afternoonCount > 0) {
+    if (afternoonCount > 0 && afternoonForecasts != nullptr) {
         float totalTemp = 0;
         float totalPop = 0;
         
@@ -774,7 +815,14 @@ void WeatherService::calculateDailyForecasts() {
         afternoonForecast.iconCode = "01d"; // Default sunny
     }
     
-    // Cleanup
-    delete[] morningForecasts;
-    delete[] afternoonForecasts;
+    // Cleanup - only delete if they were allocated
+    if (morningForecasts != nullptr) {
+        delete[] morningForecasts;
+        morningForecasts = nullptr;
+    }
+    
+    if (afternoonForecasts != nullptr) {
+        delete[] afternoonForecasts;
+        afternoonForecasts = nullptr;
+    }
 }
