@@ -411,7 +411,7 @@ void UIManager::updateCurrentWeather(float temp, float feels_like, const char* d
             lv_obj_set_style_pad_all(parent, 0, 0);
         } else {
             // Fall back to text icon if image creation failed
-            const char* defaultIcon = "⛅"; // Default icon
+            const char* defaultIcon = "icon_02d"; // Default icon
             if (weatherIcon) {
                 lv_label_set_text(weatherIcon, defaultIcon);
                 lv_obj_clear_flag(weatherIcon, LV_OBJ_FLAG_HIDDEN);
@@ -419,7 +419,7 @@ void UIManager::updateCurrentWeather(float temp, float feels_like, const char* d
         }
     } else if (weatherIcon) {
         // No icon code provided, show a default icon
-        lv_label_set_text(weatherIcon, "⛅");
+        lv_label_set_text(weatherIcon, "icon_02d");
         lv_obj_clear_flag(weatherIcon, LV_OBJ_FLAG_HIDDEN);
         
         // Hide the image if it exists
@@ -450,7 +450,7 @@ void UIManager::updateMorningForecast(float temp, float pop, const char* iconCod
     
     // Update rain probability
     char rainStr[16];
-    snprintf(rainStr, sizeof(rainStr), "☔ %.0f%%", pop * 100);
+    snprintf(rainStr, sizeof(rainStr), "Regen: %.0f%%", pop * 100);
     if (morningRainLabel) {
         lv_label_set_text(morningRainLabel, rainStr);
     }
@@ -491,7 +491,7 @@ void UIManager::updateMorningForecast(float temp, float pop, const char* iconCod
             lv_obj_set_style_bg_opa(lv_obj_get_parent(morningIconImg), LV_OPA_TRANSP, 0);
         } else {
             // Fall back to text icon if image creation failed
-            const char* defaultIcon = "⛅"; // Default icon
+            const char* defaultIcon = "icon_02d"; // Default icon
             if (morningIcon) {
                 lv_label_set_text(morningIcon, defaultIcon);
                 lv_obj_clear_flag(morningIcon, LV_OBJ_FLAG_HIDDEN);
@@ -515,7 +515,7 @@ void UIManager::updateAfternoonForecast(float temp, float pop, const char* iconC
     
     // Update rain probability
     char rainStr[16];
-    snprintf(rainStr, sizeof(rainStr), "☔ %.0f%%", pop * 100);
+    snprintf(rainStr, sizeof(rainStr), "Regen: %.0f%%", pop * 100);
     lv_label_set_text(afternoonRainLabel, rainStr);
     
     // Update weather icon
@@ -554,7 +554,7 @@ void UIManager::updateAfternoonForecast(float temp, float pop, const char* iconC
             lv_obj_set_style_bg_opa(lv_obj_get_parent(afternoonIconImg), LV_OPA_TRANSP, 0);
         } else {
             // Fall back to text icon if image creation failed
-            const char* defaultIcon = "⛅"; // Default icon
+            const char* defaultIcon = "icon_02d"; // Default icon
             if (afternoonIcon) {
                 lv_label_set_text(afternoonIcon, defaultIcon);
                 lv_obj_clear_flag(afternoonIcon, LV_OBJ_FLAG_HIDDEN);
@@ -1105,7 +1105,7 @@ void UIManager::createHomeScreen() {
     // Create the label (fallback)
     weatherIcon = lv_label_create(weatherIconContainer);
     lv_obj_set_style_text_font(weatherIcon, &lv_font_montserrat_40, 0);  // Slightly smaller font
-    lv_label_set_text(weatherIcon, "⛅");  // Default icon
+    lv_label_set_text(weatherIcon, "icon_02d");  // Default icon
     lv_obj_center(weatherIcon);
     
     // The image will be created in updateCurrentWeather when we have the actual icon data
@@ -1165,7 +1165,7 @@ void UIManager::createHomeScreen() {
     // Create the label (fallback)
     morningIcon = lv_label_create(morningIconContainer);
     lv_obj_set_style_text_font(morningIcon, &lv_font_montserrat_20, 0);
-    lv_label_set_text(morningIcon, "⛅");
+    lv_label_set_text(morningIcon, "icon_02d");
     lv_obj_center(morningIcon);
     
     // The image will be created in updateMorningForecast when we have the actual icon data
@@ -1178,7 +1178,7 @@ void UIManager::createHomeScreen() {
     
     morningRainLabel = lv_label_create(forecastPanel);
     lv_obj_add_style(morningRainLabel, &infoStyle, 0);
-    lv_label_set_text(morningRainLabel, "☔ --%");
+    lv_label_set_text(morningRainLabel, "Regen: --%");
     lv_obj_align(morningRainLabel, LV_ALIGN_TOP_MID, 0, 85);  // Moved up
     
     // Afternoon title - in bottom half
@@ -1196,7 +1196,7 @@ void UIManager::createHomeScreen() {
     // Create the label (fallback)
     afternoonIcon = lv_label_create(afternoonIconContainer);
     lv_obj_set_style_text_font(afternoonIcon, &lv_font_montserrat_20, 0);
-    lv_label_set_text(afternoonIcon, "⛅");
+    lv_label_set_text(afternoonIcon, "icon_02d");
     lv_obj_center(afternoonIcon);
     
     // The image will be created in updateAfternoonForecast when we have the actual icon data
@@ -1209,7 +1209,7 @@ void UIManager::createHomeScreen() {
     
     afternoonRainLabel = lv_label_create(forecastPanel);
     lv_obj_add_style(afternoonRainLabel, &infoStyle, 0);
-    lv_label_set_text(afternoonRainLabel, "☔ --%");
+    lv_label_set_text(afternoonRainLabel, "Regen: --%");
     lv_obj_align(afternoonRainLabel, LV_ALIGN_TOP_MID, 0, 213);  // Moved up
     
     lv_obj_set_grid_dsc_array(sensorPanel, col_dsc, row_dsc);
