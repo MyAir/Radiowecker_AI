@@ -245,12 +245,19 @@ private:
     BrightnessCallback brightnessCallback = nullptr;
     
     // Styles
-    lv_style_t timeStyle;
-    lv_style_t dateStyle;
-    lv_style_t infoStyle;
-    lv_style_t statusStyle;
-    lv_style_t buttonStyle;
-    lv_style_t buttonPressedStyle;
+    lv_style_t infoStyle;     // Style for general information text
+    lv_style_t statusStyle;   // Style for status bar text
+    lv_style_t timeStyle;     // Style for the clock
+    lv_style_t dateStyle;     // Style for the date
+    lv_style_t panelStyle;    // Style for panels
+    lv_style_t titleStyle;    // Style for titles
+    lv_style_t valueStyle;    // Style for values
+    lv_style_t iconStyle;     // Style for icons
+    lv_style_t weatherIconStyle; // Style for weather icons
+    lv_style_t buttonStyle;   // Style for buttons
+    lv_style_t buttonPressedStyle; // Style for pressed buttons
+    lv_style_t dayButtonStyle;     // Style for day buttons in alarm settings
+    lv_style_t dayButtonActiveStyle; // Style for active day buttons
     
     // Current theme
     bool darkTheme = true;

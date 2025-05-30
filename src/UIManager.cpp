@@ -5,13 +5,18 @@
 #include "DisplayManager.h"
 #include "AudioManager.h"
 
-// Include LVGL fonts
+// Include LVGL standard fonts
 LV_FONT_DECLARE(lv_font_montserrat_14);
 LV_FONT_DECLARE(lv_font_montserrat_16);
 LV_FONT_DECLARE(lv_font_montserrat_20);
 LV_FONT_DECLARE(lv_font_montserrat_24);
 LV_FONT_DECLARE(lv_font_montserrat_32);
 LV_FONT_DECLARE(lv_font_montserrat_48);
+
+// Include custom Montserrat fonts with German umlaut support
+LV_FONT_DECLARE(lv_font_montserrat_16x);
+LV_FONT_DECLARE(lv_font_montserrat_20x);
+LV_FONT_DECLARE(lv_font_montserrat_40x);
 
 // Define the static instance pointer
 UIManager* UIManager::instance = nullptr;
@@ -862,9 +867,9 @@ void UIManager::showAlarmScreen() {
 }
 
 void UIManager::initTheme() {
-    // Initialize styles for main UI elements
+    // Initialize styles for main UI elements with custom fonts for German umlauts
     lv_style_init(&infoStyle);
-    lv_style_set_text_font(&infoStyle, &lv_font_montserrat_16);
+    lv_style_set_text_font(&infoStyle, &lv_font_montserrat_16x);  // Custom font with umlauts
     lv_style_set_text_color(&infoStyle, lv_color_hex(0xCCCCCC));
     
     lv_style_init(&statusStyle);
@@ -876,8 +881,31 @@ void UIManager::initTheme() {
     lv_style_set_text_color(&timeStyle, lv_color_white());
     
     lv_style_init(&dateStyle);
-    lv_style_set_text_font(&dateStyle, &lv_font_montserrat_24);
+    lv_style_set_text_font(&dateStyle, &lv_font_montserrat_16x);  // Custom font with umlauts
     lv_style_set_text_color(&dateStyle, lv_color_hex(0xCCCCCC));
+    
+    // Weather panel styles
+    lv_style_init(&panelStyle);
+    lv_style_set_bg_color(&panelStyle, lv_color_hex(0x1D232B)); // Darker blue
+    lv_style_set_radius(&panelStyle, 10);
+    lv_style_set_pad_all(&panelStyle, 10);
+    lv_style_set_border_width(&panelStyle, 0);
+    
+    lv_style_init(&titleStyle);
+    lv_style_set_text_font(&titleStyle, &lv_font_montserrat_20x);  // Custom font with umlauts
+    lv_style_set_text_color(&titleStyle, lv_color_white());
+    
+    lv_style_init(&valueStyle);
+    lv_style_set_text_font(&valueStyle, &lv_font_montserrat_24);
+    lv_style_set_text_color(&valueStyle, lv_color_white());
+    
+    lv_style_init(&iconStyle);
+    lv_style_set_text_font(&iconStyle, &lv_font_montserrat_32);
+    lv_style_set_text_color(&iconStyle, lv_color_white());
+    
+    lv_style_init(&weatherIconStyle);
+    lv_style_set_text_font(&weatherIconStyle, &lv_font_montserrat_40x);  // Custom font with weather symbols
+    lv_style_set_text_color(&weatherIconStyle, lv_color_white());
     
     // Button styles - enhanced for better visibility and touch target
     lv_style_init(&buttonStyle);
@@ -889,13 +917,26 @@ void UIManager::initTheme() {
     lv_style_set_shadow_width(&buttonStyle, 8); // Larger shadow
     lv_style_set_shadow_ofs_y(&buttonStyle, 5);
     lv_style_set_pad_all(&buttonStyle, 10); // More padding for easier touch target
-    lv_style_set_text_font(&buttonStyle, &lv_font_montserrat_18); // Larger text
+    lv_style_set_text_font(&buttonStyle, &lv_font_montserrat_16x);  // Custom font with umlauts
     
     lv_style_init(&buttonPressedStyle);
     lv_style_set_bg_color(&buttonPressedStyle, lv_color_hex(0x1976D2)); // Darker blue
     lv_style_set_text_color(&buttonPressedStyle, lv_color_white());
     lv_style_set_shadow_width(&buttonPressedStyle, 0);
     lv_style_set_bg_opa(&buttonPressedStyle, LV_OPA_80);
+    
+    // Day button styles for alarm settings
+    lv_style_init(&dayButtonStyle);
+    lv_style_set_bg_color(&dayButtonStyle, lv_color_hex(0x2D4358)); // Blue gray
+    lv_style_set_text_color(&dayButtonStyle, lv_color_white());
+    lv_style_set_border_width(&dayButtonStyle, 0);
+    lv_style_set_outline_width(&dayButtonStyle, 0);
+    lv_style_set_radius(&dayButtonStyle, 5);
+    lv_style_set_height(&dayButtonStyle, 20);
+    lv_style_set_width(&dayButtonStyle, 30);
+    
+    lv_style_init(&dayButtonActiveStyle);
+    lv_style_set_bg_color(&dayButtonActiveStyle, lv_color_hex(0x3E5A7A)); // Lighter blue
     
     // Set the default screen color
     static lv_style_t screen_style;
@@ -907,17 +948,14 @@ void UIManager::initTheme() {
     
     lv_obj_add_style(lv_scr_act(), &screen_style, 0);
     
-    // Note: Anti-aliasing is enabled by default in LVGL
-    
-    // Set default theme
+    // Set default theme with custom font
     lv_theme_t* theme = lv_theme_default_init(
         lv_disp_get_default(),
         lv_palette_main(LV_PALETTE_BLUE),
         lv_palette_main(LV_PALETTE_RED),
         darkTheme,  // Use dark theme
-        &lv_font_montserrat_16
+        &lv_font_montserrat_16x  // Custom font with umlauts as default font
     );
-    lv_disp_set_theme(lv_disp_get_default(), theme);
     lv_disp_set_theme(lv_disp_get_default(), theme);
 }
 
