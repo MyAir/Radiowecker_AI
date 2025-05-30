@@ -18,6 +18,9 @@ LV_FONT_DECLARE(lv_font_montserrat_16x);
 LV_FONT_DECLARE(lv_font_montserrat_20x);
 LV_FONT_DECLARE(lv_font_montserrat_40x);
 
+// Include weather icons
+LV_IMG_DECLARE(icon_02d);
+
 // Define the static instance pointer
 UIManager* UIManager::instance = nullptr;
 
@@ -410,22 +413,32 @@ void UIManager::updateCurrentWeather(float temp, float feels_like, const char* d
             lv_obj_set_style_outline_opa(parent, LV_OPA_TRANSP, 0);
             lv_obj_set_style_pad_all(parent, 0, 0);
         } else {
-            // Fall back to text icon if image creation failed
-            const char* defaultIcon = "icon_02d"; // Default icon
+            // Fall back to using a direct image object
             if (weatherIcon) {
-                lv_label_set_text(weatherIcon, defaultIcon);
-                lv_obj_clear_flag(weatherIcon, LV_OBJ_FLAG_HIDDEN);
+                // Hide text label
+                lv_obj_add_flag(weatherIcon, LV_OBJ_FLAG_HIDDEN);
+                
+                // Create image if needed
+                if (weatherIconImg == nullptr) {
+                    weatherIconImg = lv_img_create(lv_obj_get_parent(weatherIcon));
+                    lv_img_set_src(weatherIconImg, &icon_02d);
+                    lv_obj_align_to(weatherIconImg, weatherIcon, LV_ALIGN_CENTER, 0, 0);
+                }
+                lv_obj_clear_flag(weatherIconImg, LV_OBJ_FLAG_HIDDEN);
             }
         }
     } else if (weatherIcon) {
-        // No icon code provided, show a default icon
-        lv_label_set_text(weatherIcon, "icon_02d");
-        lv_obj_clear_flag(weatherIcon, LV_OBJ_FLAG_HIDDEN);
+        // No icon code provided, use the default icon_02d image
+        // Hide text label
+        lv_obj_add_flag(weatherIcon, LV_OBJ_FLAG_HIDDEN);
         
-        // Hide the image if it exists
-        if (weatherIconImg) {
-            lv_obj_add_flag(weatherIconImg, LV_OBJ_FLAG_HIDDEN);
+        // Create or show image
+        if (weatherIconImg == nullptr) {
+            weatherIconImg = lv_img_create(lv_obj_get_parent(weatherIcon));
+            lv_img_set_src(weatherIconImg, &icon_02d);
+            lv_obj_align_to(weatherIconImg, weatherIcon, LV_ALIGN_CENTER, 0, 0);
         }
+        lv_obj_clear_flag(weatherIconImg, LV_OBJ_FLAG_HIDDEN);
     }
     
     Serial.printf("[INFO] Updated current weather: %.1f°C, Gefühlt: %.1f°C, %s\n", 
@@ -490,11 +503,18 @@ void UIManager::updateMorningForecast(float temp, float pop, const char* iconCod
             // Make sure the parent container is transparent
             lv_obj_set_style_bg_opa(lv_obj_get_parent(morningIconImg), LV_OPA_TRANSP, 0);
         } else {
-            // Fall back to text icon if image creation failed
-            const char* defaultIcon = "icon_02d"; // Default icon
+            // Fall back to using the icon_02d image
             if (morningIcon) {
-                lv_label_set_text(morningIcon, defaultIcon);
-                lv_obj_clear_flag(morningIcon, LV_OBJ_FLAG_HIDDEN);
+                // Hide text label
+                lv_obj_add_flag(morningIcon, LV_OBJ_FLAG_HIDDEN);
+                
+                // Create image if needed
+                if (morningIconImg == nullptr) {
+                    morningIconImg = lv_img_create(lv_obj_get_parent(morningIcon));
+                    lv_img_set_src(morningIconImg, &icon_02d);
+                    lv_obj_align_to(morningIconImg, morningIcon, LV_ALIGN_CENTER, 0, 0);
+                }
+                lv_obj_clear_flag(morningIconImg, LV_OBJ_FLAG_HIDDEN);
             }
         }
     }
@@ -553,11 +573,18 @@ void UIManager::updateAfternoonForecast(float temp, float pop, const char* iconC
             // Make sure the parent container is transparent
             lv_obj_set_style_bg_opa(lv_obj_get_parent(afternoonIconImg), LV_OPA_TRANSP, 0);
         } else {
-            // Fall back to text icon if image creation failed
-            const char* defaultIcon = "icon_02d"; // Default icon
+            // Fall back to using the icon_02d image
             if (afternoonIcon) {
-                lv_label_set_text(afternoonIcon, defaultIcon);
-                lv_obj_clear_flag(afternoonIcon, LV_OBJ_FLAG_HIDDEN);
+                // Hide text label
+                lv_obj_add_flag(afternoonIcon, LV_OBJ_FLAG_HIDDEN);
+                
+                // Create image if needed
+                if (afternoonIconImg == nullptr) {
+                    afternoonIconImg = lv_img_create(lv_obj_get_parent(afternoonIcon));
+                    lv_img_set_src(afternoonIconImg, &icon_02d);
+                    lv_obj_align_to(afternoonIconImg, afternoonIcon, LV_ALIGN_CENTER, 0, 0);
+                }
+                lv_obj_clear_flag(afternoonIconImg, LV_OBJ_FLAG_HIDDEN);
             }
         }
     }
@@ -1105,7 +1132,7 @@ void UIManager::createHomeScreen() {
     // Create the label (fallback)
     weatherIcon = lv_label_create(weatherIconContainer);
     lv_obj_set_style_text_font(weatherIcon, &lv_font_montserrat_40, 0);  // Slightly smaller font
-    lv_label_set_text(weatherIcon, "icon_02d");  // Default icon
+    lv_label_set_text(weatherIcon, "");  // Empty text, we'll use the image instead
     lv_obj_center(weatherIcon);
     
     // The image will be created in updateCurrentWeather when we have the actual icon data
@@ -1165,7 +1192,7 @@ void UIManager::createHomeScreen() {
     // Create the label (fallback)
     morningIcon = lv_label_create(morningIconContainer);
     lv_obj_set_style_text_font(morningIcon, &lv_font_montserrat_20, 0);
-    lv_label_set_text(morningIcon, "icon_02d");
+    lv_label_set_text(morningIcon, "");  // Empty text, we'll use the image instead
     lv_obj_center(morningIcon);
     
     // The image will be created in updateMorningForecast when we have the actual icon data
@@ -1196,7 +1223,7 @@ void UIManager::createHomeScreen() {
     // Create the label (fallback)
     afternoonIcon = lv_label_create(afternoonIconContainer);
     lv_obj_set_style_text_font(afternoonIcon, &lv_font_montserrat_20, 0);
-    lv_label_set_text(afternoonIcon, "icon_02d");
+    lv_label_set_text(afternoonIcon, "");  // Empty text, we'll use the image instead
     lv_obj_center(afternoonIcon);
     
     // The image will be created in updateAfternoonForecast when we have the actual icon data
