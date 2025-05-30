@@ -334,13 +334,13 @@ void UIManager::updateWifiQuality(int quality) {
     // Format the signal quality string with an emoji representation
     char qualityStr[20];
     if (quality >= 80) {
-        snprintf(qualityStr, sizeof(qualityStr), "📶 %d%%", quality);
+        snprintf(qualityStr, sizeof(qualityStr), LV_SYMBOL_WIFI " %d%%", quality);
     } else if (quality >= 60) {
-        snprintf(qualityStr, sizeof(qualityStr), "📶 %d%%", quality);
+        snprintf(qualityStr, sizeof(qualityStr), LV_SYMBOL_WIFI " %d%%", quality);
     } else if (quality >= 40) {
-        snprintf(qualityStr, sizeof(qualityStr), "📶 %d%%", quality);
+        snprintf(qualityStr, sizeof(qualityStr), LV_SYMBOL_WIFI " %d%%", quality);
     } else {
-        snprintf(qualityStr, sizeof(qualityStr), "📶 %d%%", quality);
+        snprintf(qualityStr, sizeof(qualityStr), LV_SYMBOL_WIFI " %d%%", quality);
     }
     
     if (wifiQualityLabel) {
@@ -978,7 +978,7 @@ void UIManager::createHomeScreen() {
     // WiFi quality in the right section
     wifiQualityLabel = lv_label_create(statusBar);
     lv_obj_add_style(wifiQualityLabel, &statusStyle, 0);
-    lv_label_set_text(wifiQualityLabel, "📶 --");
+    lv_label_set_text(wifiQualityLabel, LV_SYMBOL_WIFI " --");
     lv_obj_align(wifiQualityLabel, LV_ALIGN_RIGHT_MID, -10, 0);
     
     // Create a large panel for the time and date - spans from below status bar to sensor box, horizontally to weather box
