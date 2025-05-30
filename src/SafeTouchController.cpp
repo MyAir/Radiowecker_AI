@@ -39,15 +39,20 @@ bool SafeTouchController::begin() {
     }
     
     // Request 4 bytes (product ID is 4 bytes)
-    Wire.requestFrom(GT911_I2C_ADDR_DEFAULT, 4);
+    Wire.requestFrom((uint8_t)GT911_I2C_ADDR_DEFAULT, (uint8_t)4);
     if (Wire.available() < 4) {
         Serial.println("[SafeTouch] Failed to read product ID");
         return false;
     }
     
     char id[5] = {0}; // 4 bytes + null terminator
-    for (int i = 0; i < 4; i++) {
-        id[i] = Wire.read();
+    for (uint8_t i = 0; i < 4; i++) {
+        if (Wire.available()) {
+            id[i] = static_cast<char>(Wire.read());
+        } else {
+            Serial.println("[SafeTouch] Unexpected end of data while reading product ID");
+            return false;
+        }
     }
     
     Serial.printf("[SafeTouch] GT911 Product ID: %s\n", id);
@@ -97,13 +102,13 @@ bool SafeTouchController::read() {
     // GT911 data format: 
     // - X coordinate is little-endian (low byte first)
     // - Y coordinate follows the same pattern
-    x = (pointData[1] << 8) | pointData[0];
-    y = (pointData[3] << 8) | pointData[2];
+    x = static_cast<int16_t>((pointData[1] << 8) | pointData[0]);
+    y = static_cast<int16_t>((pointData[3] << 8) | pointData[2]);
     
     // Rotate coordinates if needed based on display rotation
     // For now, just making sure they're within bounds
-    x = constrain(x, 0, _width - 1);
-    y = constrain(y, 0, _height - 1);
+    x = constrain(x, 0, static_cast<int16_t>(_width - 1));
+    y = constrain(y, 0, static_cast<int16_t>(_height - 1));
     
     return true;
 }
@@ -149,7 +154,7 @@ uint8_t SafeTouchController::readReg(uint16_t reg) {
         return 0;
     }
     
-    Wire.requestFrom(GT911_I2C_ADDR_DEFAULT, 1);
+    Wire.requestFrom((uint8_t)GT911_I2C_ADDR_DEFAULT, (uint8_t)1);
     if (!Wire.available()) {
         return 0;
     }
@@ -170,13 +175,19 @@ bool SafeTouchController::readBlockData(uint16_t reg, uint8_t *buffer, uint8_t l
         return false;
     }
     
-    Wire.requestFrom(GT911_I2C_ADDR_DEFAULT, length);
+    Wire.requestFrom((uint8_t)GT911_I2C_ADDR_DEFAULT, (uint8_t)length);
     if (Wire.available() < length) {
         return false;
     }
     
     for (uint8_t i = 0; i < length; i++) {
-        buffer[i] = Wire.read();
+        // Check if there's data available before reading
+        if (Wire.available()) {
+            buffer[i] = Wire.read();
+        } else {
+            Serial.println("[SafeTouch] Unexpected end of data while reading block");
+            return false;
+        }
     }
     
     return true;

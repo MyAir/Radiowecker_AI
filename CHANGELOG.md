@@ -1,5 +1,16 @@
 # Radiowecker AI Changelog
 
+## [1.2.2] - 2025-05-30
+
+### Fixed
+- Resolved compiler warnings in SafeTouchController implementation
+- Reduced excessive debug output for time updates
+
+### Improved
+- Enhanced error handling in I2C communication with touch controller
+- Added proper type conversions to prevent potential issues
+- Improved robustness of touch data reading
+
 ## [1.2.1] - 2025-05-30
 
 ### Changed

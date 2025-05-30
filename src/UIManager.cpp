@@ -89,11 +89,11 @@ void UIManager::updateTime(const char* timeStr) {
     }
     
     // Debug output
-    if (now - lastUpdate >= 1000) {  // Log at most once per second
-        Serial.printf("[DEBUG] Updating time from '%s' to '%s'\n", 
-                     currentText ? currentText : "NULL", timeStr);
-        lastUpdate = now;
-    }
+    // if (now - lastUpdate >= 1000) {  // Log at most once per second
+    //     Serial.printf("[DEBUG] Updating time from '%s' to '%s'\n", 
+    //                  currentText ? currentText : "NULL", timeStr);
+    //     lastUpdate = now;
+    // }
     
     // Update the label text
     lv_label_set_text(timeLabel, timeStr);
