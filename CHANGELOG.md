@@ -1,5 +1,22 @@
 # Radiowecker AI Changelog
 
+## [1.2.5] - 2025-05-30
+
+### Fixed
+- Fixed time calculation issues in weather forecast periods
+- Added proper error handling for time-related functions
+- Implemented fallback defaults for invalid sunrise/sunset times
+- Improved debug output for time range calculations
+- Fixed initialization of time structures to prevent January 1st, 1970 timestamps
+- Added DST (Daylight Saving Time) awareness to time calculations
+
+## [1.2.4] - 2025-05-30
+
+### Added
+- Added night forecast period to complement morning and afternoon forecasts
+- Implemented smarter forecast period calculations based on sunrise and sunset times
+- Improved forecast time ranges to better match time of day
+
 ## [1.2.3] - 2025-05-30
 
 ### Fixed

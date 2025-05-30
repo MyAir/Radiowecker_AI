@@ -131,9 +131,10 @@ private:
     HourlyForecast hourlyForecasts[MAX_HOURLY_FORECASTS];
     int hourlyForecastCount = 0;
     
-    // Storage for morning and afternoon forecast summaries
+    // Storage for morning, afternoon, and night forecast summaries
     ForecastSummary morningForecast;
     ForecastSummary afternoonForecast;
+    ForecastSummary nightForecast;
     
     // Function to make API call
     bool fetchWeatherData();
@@ -174,9 +175,10 @@ public:
         return dailyForecasts[0]; // Return today's forecast as fallback
     }
     
-    // Get morning and afternoon forecast summaries
+    // Get forecast summaries
     const ForecastSummary& getMorningForecast() const { return morningForecast; }
     const ForecastSummary& getAfternoonForecast() const { return afternoonForecast; }
+    const ForecastSummary& getNightForecast() const { return nightForecast; }
     
     // Set update interval (in milliseconds)
     void setUpdateInterval(uint32_t interval) { updateInterval = interval; }

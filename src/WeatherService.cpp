@@ -570,9 +570,10 @@ void WeatherService::calculateDailyForecasts() {
     Serial.println("[INFO] Calculating daily forecasts from hourly data");
     Serial.printf("[DEBUG] Starting with %d hourly forecast entries\n", hourlyForecastCount);
     
-    // Reset the morning and afternoon forecasts
+    // Reset all forecasts
     morningForecast = ForecastSummary();
     afternoonForecast = ForecastSummary();
+    nightForecast = ForecastSummary();
     
     // Safety check - if we have no hourly forecasts, set defaults and return early
     if (hourlyForecastCount <= 0) {
@@ -583,26 +584,46 @@ void WeatherService::calculateDailyForecasts() {
         morningForecast.avgPop = 0;
         morningForecast.iconCode = "01d"; // Default sunny
         
-        // Set safe defaults for afternoon forecast
+        // Set safe defaults for afternoon and night forecasts
         afternoonForecast.avgTemp = 0;
         afternoonForecast.avgPop = 0;
         afternoonForecast.iconCode = "01d"; // Default sunny
+        
+        nightForecast.avgTemp = 0;
+        nightForecast.avgPop = 0;
+        nightForecast.iconCode = "01n"; // Default night
         
         return;
     }
         
     // Get the current time to determine which forecasts to use
     time_t now = time(nullptr);
+    if (now < 0) {
+        Serial.println("[ERROR] Failed to get current time");
+        return;
+    }
+    
     struct tm timeinfo;
-    localtime_r(&now, &timeinfo);
-    int currentHour = timeinfo.tm_hour;
+    if (!localtime_r(&now, &timeinfo)) {
+        Serial.println("[ERROR] Failed to convert current time to local time");
+        return;
+    }
     
     // Calculate timestamps for today's midnight, noon, and tomorrow's midnight
-    struct tm todayMidnight = timeinfo;
+    struct tm todayMidnight = {0};
+    todayMidnight.tm_year = timeinfo.tm_year;
+    todayMidnight.tm_mon = timeinfo.tm_mon;
+    todayMidnight.tm_mday = timeinfo.tm_mday;
     todayMidnight.tm_hour = 0;
     todayMidnight.tm_min = 0;
     todayMidnight.tm_sec = 0;
+    todayMidnight.tm_isdst = timeinfo.tm_isdst; // Respect DST
+    
     time_t todayMidnightTime = mktime(&todayMidnight);
+    if (todayMidnightTime == -1) {
+        Serial.println("[ERROR] Failed to calculate today's midnight time");
+        return;
+    }
     
     time_t todayNoon = todayMidnightTime + 12 * 3600; // Add 12 hours for noon
     time_t tomorrowMidnight = todayMidnightTime + 24 * 3600; // Add 24 hours for tomorrow midnight
@@ -628,13 +649,16 @@ void WeatherService::calculateDailyForecasts() {
     // Allocate arrays for hourly forecasts with safety checks
     HourlyForecast* morningForecasts = nullptr;
     HourlyForecast* afternoonForecasts = nullptr;
+    HourlyForecast* nightForecasts = nullptr;
     int morningCount = 0;
     int afternoonCount = 0;
+    int nightCount = 0;
     
     // Only allocate memory if we have forecast data
     if (hourlyForecastCount > 0) {
         morningForecasts = new HourlyForecast[hourlyForecastCount];
         afternoonForecasts = new HourlyForecast[hourlyForecastCount];
+        nightForecasts = new HourlyForecast[hourlyForecastCount];
     } else {
         Serial.println("[WARNING] No hourly forecast data available");
         return; // Exit early if no data
@@ -643,103 +667,228 @@ void WeatherService::calculateDailyForecasts() {
     // Today's day of month
     int todayDay = timeinfo.tm_mday;
     
+    // Get today's sunrise and sunset times from the current weather data
+    time_t todaySunrise = currentWeather.sunrise;
+    time_t todaySunset = currentWeather.sunset;
     
-    if (currentHour < 12) {
-        // Time is between 00:00 and 12:00
-        Serial.println("[INFO] Morning mode: Using today's morning and afternoon");
+    // Validate sunrise/sunset times
+    if (todaySunrise == 0 || todaySunset == 0) {
+        Serial.println("[WARNING] Invalid sunrise/sunset times from current weather");
+        // Set default times if invalid (6:00 AM and 8:00 PM)
+        struct tm defaultSunrise = {0};
+        defaultSunrise.tm_year = timeinfo.tm_year;
+        defaultSunrise.tm_mon = timeinfo.tm_mon;
+        defaultSunrise.tm_mday = timeinfo.tm_mday;
+        defaultSunrise.tm_hour = 6;  // 6:00 AM
+        defaultSunrise.tm_min = 0;
+        defaultSunrise.tm_isdst = timeinfo.tm_isdst;
+        todaySunrise = mktime(&defaultSunrise);
         
-        // Morning forecast: Today from now until noon
-        Serial.println("[DEBUG] Collecting morning forecasts (today from now to noon):");
-        for (int i = 0; i < hourlyForecastCount; i++) {
-            // Print timestamp info to debug format
-            time_t timestamp = hourlyForecasts[i].dt;
-            struct tm forecastTime;
-            localtime_r(&timestamp, &forecastTime);
-            char timeStr[20];
-            strftime(timeStr, sizeof(timeStr), "%H:%M %d.%m.%Y", &forecastTime);
-            
-            // Check if this forecast belongs in the morning group
-            bool inRange = (hourlyForecasts[i].dt >= now && hourlyForecasts[i].dt < todayNoon);
-            if (inRange) {
-                morningForecasts[morningCount++] = hourlyForecasts[i];
-                Serial.printf("[DEBUG] ✓ Added to morning: %s (%.1f°C, PoP: %.0f%%)\n", 
-                             timeStr, hourlyForecasts[i].temp, hourlyForecasts[i].pop * 100);
-            } else {
-                Serial.printf("[DEBUG] ✗ Not in morning range: %s\n", timeStr);
-            }
-        }
-        Serial.printf("[DEBUG] Collected %d morning forecasts\n", morningCount);
-        
-        // Afternoon forecast: Today from noon until midnight
-        Serial.println("[DEBUG] Collecting afternoon forecasts (today from noon to midnight):");
-        for (int i = 0; i < hourlyForecastCount; i++) {
-            // Print timestamp info to debug format
-            time_t timestamp = hourlyForecasts[i].dt;
-            struct tm forecastTime;
-            localtime_r(&timestamp, &forecastTime);
-            char timeStr[20];
-            strftime(timeStr, sizeof(timeStr), "%H:%M %d.%m.%Y", &forecastTime);
-            
-            // Check if this forecast belongs in the afternoon group
-            bool inRange = (hourlyForecasts[i].dt >= todayNoon && hourlyForecasts[i].dt < tomorrowMidnight);
-            if (inRange) {
-                afternoonForecasts[afternoonCount++] = hourlyForecasts[i];
-                Serial.printf("[DEBUG] ✓ Added to afternoon: %s (%.1f°C, PoP: %.0f%%)\n", 
-                             timeStr, hourlyForecasts[i].temp, hourlyForecasts[i].pop * 100);
-            } else {
-                Serial.printf("[DEBUG] ✗ Not in afternoon range: %s\n", timeStr);
-            }
-        }
-        Serial.printf("[DEBUG] Collected %d afternoon forecasts\n", afternoonCount);
-    } else {
-        // Time is between 12:01 and 23:59
-        Serial.println("[INFO] Afternoon mode: Using today's afternoon and tomorrow's morning");
-        
-        // Afternoon forecast: Today from now until midnight
-        Serial.println("[DEBUG] Collecting afternoon forecasts (today from now to midnight):");
-        for (int i = 0; i < hourlyForecastCount; i++) {
-            // Print timestamp info to debug format
-            time_t timestamp = hourlyForecasts[i].dt;
-            struct tm forecastTime;
-            localtime_r(&timestamp, &forecastTime);
-            char timeStr[20];
-            strftime(timeStr, sizeof(timeStr), "%H:%M %d.%m.%Y", &forecastTime);
-            
-            // Check if this forecast belongs in the afternoon group
-            bool inRange = (hourlyForecasts[i].dt >= now && hourlyForecasts[i].dt < tomorrowMidnight);
-            if (inRange) {
-                afternoonForecasts[afternoonCount++] = hourlyForecasts[i];
-                Serial.printf("[DEBUG] ✓ Added to afternoon: %s (%.1f°C, PoP: %.0f%%)\n", 
-                             timeStr, hourlyForecasts[i].temp, hourlyForecasts[i].pop * 100);
-            } else {
-                Serial.printf("[DEBUG] ✗ Not in afternoon range: %s\n", timeStr);
-            }
-        }
-        Serial.printf("[DEBUG] Collected %d afternoon forecasts\n", afternoonCount);
-        
-        // Morning forecast: Tomorrow from midnight until noon
-        time_t tomorrowNoon = tomorrowMidnight + 12 * 3600; // Add 12 hours for noon
-        Serial.println("[DEBUG] Collecting morning forecasts (tomorrow from midnight to noon):");
-        for (int i = 0; i < hourlyForecastCount; i++) {
-            // Print timestamp info to debug format
-            time_t timestamp = hourlyForecasts[i].dt;
-            struct tm forecastTime;
-            localtime_r(&timestamp, &forecastTime);
-            char timeStr[20];
-            strftime(timeStr, sizeof(timeStr), "%H:%M %d.%m.%Y", &forecastTime);
-            
-            // Check if this forecast belongs in the morning group
-            bool inRange = (hourlyForecasts[i].dt >= tomorrowMidnight && hourlyForecasts[i].dt < tomorrowNoon);
-            if (inRange) {
-                morningForecasts[morningCount++] = hourlyForecasts[i];
-                Serial.printf("[DEBUG] ✓ Added to morning: %s (%.1f°C, PoP: %.0f%%)\n", 
-                             timeStr, hourlyForecasts[i].temp, hourlyForecasts[i].pop * 100);
-            } else {
-                Serial.printf("[DEBUG] ✗ Not in morning range: %s\n", timeStr);
-            }
-        }
-        Serial.printf("[DEBUG] Collected %d morning forecasts\n", morningCount);
+        struct tm defaultSunset = defaultSunrise;
+        defaultSunset.tm_hour = 20;  // 8:00 PM
+        todaySunset = mktime(&defaultSunset);
     }
+    
+    // Get tomorrow's sunrise and sunset from the daily forecast (index 1 is tomorrow)
+    time_t tomorrowSunrise = dailyForecasts[1].sunrise;
+    time_t tomorrowSunset = dailyForecasts[1].sunset;
+    
+    // If tomorrow's times are invalid, use today's times + 24 hours as fallback
+    if (tomorrowSunrise == 0 || tomorrowSunset == 0) {
+        Serial.println("[WARNING] Using fallback for tomorrow's sunrise/sunset times");
+        tomorrowSunrise = todaySunrise + 86400;  // Add 24 hours
+        tomorrowSunset = todaySunset + 86400;     // Add 24 hours
+    }
+    
+    // Debug output for sunrise/sunset times
+    char sunriseStr[30], sunsetStr[30], tomorrowSunriseStr[30], tomorrowSunsetStr[30];
+    
+    localtime_r(&todaySunrise, &tmpTime);
+    strftime(sunriseStr, sizeof(sunriseStr), "%H:%M %d.%m.%Y", &tmpTime);
+    
+    localtime_r(&todaySunset, &tmpTime);
+    strftime(sunsetStr, sizeof(sunsetStr), "%H:%M %d.%m.%Y", &tmpTime);
+    
+    localtime_r(&tomorrowSunrise, &tmpTime);
+    strftime(tomorrowSunriseStr, sizeof(tomorrowSunriseStr), "%H:%M %d.%m.%Y", &tmpTime);
+    
+    localtime_r(&tomorrowSunset, &tmpTime);
+    strftime(tomorrowSunsetStr, sizeof(tomorrowSunsetStr), "%H:%M %d.%m.%Y", &tmpTime);
+    
+    Serial.printf("[DEBUG] Today's sunrise: %s, sunset: %s\n", sunriseStr, sunsetStr);
+    Serial.printf("[DEBUG] Tomorrow's sunrise: %s, sunset: %s\n", tomorrowSunriseStr, tomorrowSunsetStr);
+    
+    // Determine the current time period and set appropriate time ranges
+    time_t morningStart, morningEnd, afternoonStart, afternoonEnd, nightStart, nightEnd;
+    
+    if (now >= todaySunrise && now < todayNoon) {
+        // Current time is between sunrise and noon
+        Serial.println("[INFO] Morning period: Using today's morning, afternoon, and night");
+        
+        // Morning: now until noon
+        morningStart = now;
+        morningEnd = todayNoon;
+        
+        // Afternoon: noon until sunset
+        afternoonStart = todayNoon;
+        afternoonEnd = todaySunset;
+        
+        // Night: sunset until next sunrise
+        nightStart = todaySunset;
+        nightEnd = tomorrowSunrise;
+        
+    } else if (now >= todayNoon && now < todaySunset) {
+        // Current time is between noon and sunset
+        Serial.println("[INFO] Afternoon period: Using today's afternoon, night, and tomorrow's morning");
+        
+        // Afternoon: now until sunset
+        afternoonStart = now;
+        afternoonEnd = todaySunset;
+        
+        // Night: sunset until next sunrise
+        nightStart = todaySunset;
+        nightEnd = tomorrowSunrise;
+        
+        // Morning: next sunrise until noon
+        morningStart = tomorrowSunrise;
+        morningEnd = tomorrowSunrise + 12 * 3600; // Noon tomorrow
+        
+    } else {
+        // Current time is between sunset and next sunrise
+        Serial.println("[INFO] Night period: Using tonight, tomorrow's morning, and tomorrow's afternoon");
+        
+        // Night: now until next sunrise
+        nightStart = now;
+        nightEnd = tomorrowSunrise;
+        
+        // Morning: next sunrise until noon
+        morningStart = tomorrowSunrise;
+        morningEnd = tomorrowSunrise + 12 * 3600; // Noon tomorrow
+        
+        // Afternoon: noon until sunset
+        afternoonStart = morningEnd;
+        afternoonEnd = tomorrowSunset;
+    }
+    
+    // Debug output for time ranges
+    char morningStartStr[30] = "";
+    char morningEndStr[30] = "";
+    char afternoonStartStr[30] = "";
+    char afternoonEndStr[30] = "";
+    char nightStartStr[30] = "";
+    char nightEndStr[30] = "";
+    
+    struct tm timeStruct;
+    
+    if (localtime_r(&morningStart, &timeStruct)) {
+        strftime(morningStartStr, sizeof(morningStartStr), "%H:%M %d.%m.%Y", &timeStruct);
+    } else {
+        strcpy(morningStartStr, "[invalid]");
+    }
+    
+    if (localtime_r(&morningEnd, &timeStruct)) {
+        strftime(morningEndStr, sizeof(morningEndStr), "%H:%M %d.%m.%Y", &timeStruct);
+    } else {
+        strcpy(morningEndStr, "[invalid]");
+    }
+    
+    if (localtime_r(&afternoonStart, &timeStruct)) {
+        strftime(afternoonStartStr, sizeof(afternoonStartStr), "%H:%M %d.%m.%Y", &timeStruct);
+    } else {
+        strcpy(afternoonStartStr, "[invalid]");
+    }
+    
+    if (localtime_r(&afternoonEnd, &timeStruct)) {
+        strftime(afternoonEndStr, sizeof(afternoonEndStr), "%H:%M %d.%m.%Y", &timeStruct);
+    } else {
+        strcpy(afternoonEndStr, "[invalid]");
+    }
+    
+    if (localtime_r(&nightStart, &timeStruct)) {
+        strftime(nightStartStr, sizeof(nightStartStr), "%H:%M %d.%m.%Y", &timeStruct);
+    } else {
+        strcpy(nightStartStr, "[invalid]");
+    }
+    
+    if (localtime_r(&nightEnd, &timeStruct)) {
+        strftime(nightEndStr, sizeof(nightEndStr), "%H:%M %d.%m.%Y", &timeStruct);
+    } else {
+        strcpy(nightEndStr, "[invalid]");
+    }
+    
+    Serial.printf("[DEBUG] Morning: %s to %s\n", morningStartStr, morningEndStr);
+    Serial.printf("[DEBUG] Afternoon: %s to %s\n", afternoonStartStr, afternoonEndStr);
+    Serial.printf("[DEBUG] Night: %s to %s\n", nightStartStr, nightEndStr);
+    
+    // Collect forecasts for each period
+    // The time-based logic is now handled in the first part of the function
+    // with the new time period calculations
+    
+    // Collect morning forecasts
+    Serial.println("[DEBUG] Collecting morning forecasts:");
+    for (int i = 0; i < hourlyForecastCount; i++) {
+        time_t timestamp = hourlyForecasts[i].dt;
+        struct tm forecastTime;
+        localtime_r(&timestamp, &forecastTime);
+        char timeStr[20];
+        strftime(timeStr, sizeof(timeStr), "%H:%M %d.%m.%Y", &forecastTime);
+        
+        // Check if this forecast belongs in the morning group
+        bool inRange = (hourlyForecasts[i].dt >= morningStart && hourlyForecasts[i].dt < morningEnd);
+        if (inRange) {
+            morningForecasts[morningCount++] = hourlyForecasts[i];
+            Serial.printf("[DEBUG] ✓ Added to morning: %s (%.1f°C, PoP: %.0f%%)\n", 
+                         timeStr, hourlyForecasts[i].temp, hourlyForecasts[i].pop * 100);
+        } else {
+            // Only log if we're in verbose debug mode
+            // Serial.printf("[DEBUG] ✗ Not in morning range: %s\n", timeStr);
+        }
+    }
+    Serial.printf("[DEBUG] Collected %d morning forecasts\n", morningCount);
+    
+    // Collect afternoon forecasts
+    Serial.println("[DEBUG] Collecting afternoon forecasts:");
+    for (int i = 0; i < hourlyForecastCount; i++) {
+        time_t timestamp = hourlyForecasts[i].dt;
+        struct tm forecastTime;
+        localtime_r(&timestamp, &forecastTime);
+        char timeStr[20];
+        strftime(timeStr, sizeof(timeStr), "%H:%M %d.%m.%Y", &forecastTime);
+        
+        // Check if this forecast belongs in the afternoon group
+        bool inRange = (hourlyForecasts[i].dt >= afternoonStart && hourlyForecasts[i].dt < afternoonEnd);
+        if (inRange) {
+            afternoonForecasts[afternoonCount++] = hourlyForecasts[i];
+            Serial.printf("[DEBUG] ✓ Added to afternoon: %s (%.1f°C, PoP: %.0f%%)\n", 
+                         timeStr, hourlyForecasts[i].temp, hourlyForecasts[i].pop * 100);
+        } else {
+            // Only log if we're in verbose debug mode
+            // Serial.printf("[DEBUG] ✗ Not in afternoon range: %s\n", timeStr);
+        }
+    }
+    Serial.printf("[DEBUG] Collected %d afternoon forecasts\n", afternoonCount);
+    
+    // Collect night forecasts
+    Serial.println("[DEBUG] Collecting night forecasts:");
+    for (int i = 0; i < hourlyForecastCount; i++) {
+        time_t timestamp = hourlyForecasts[i].dt;
+        struct tm forecastTime;
+        localtime_r(&timestamp, &forecastTime);
+        char timeStr[20];
+        strftime(timeStr, sizeof(timeStr), "%H:%M %d.%m.%Y", &forecastTime);
+        
+        // Check if this forecast belongs in the night group
+        bool inRange = (hourlyForecasts[i].dt >= nightStart && hourlyForecasts[i].dt < nightEnd);
+        if (inRange) {
+            nightForecasts[nightCount++] = hourlyForecasts[i];
+            Serial.printf("[DEBUG] ✓ Added to night: %s (%.1f°C, PoP: %.0f%%)\n", 
+                         timeStr, hourlyForecasts[i].temp, hourlyForecasts[i].pop * 100);
+        } else {
+            // Only log if we're in verbose debug mode
+            // Serial.printf("[DEBUG] ✗ Not in night range: %s\n", timeStr);
+        }
+    }
+    Serial.printf("[DEBUG] Collected %d night forecasts\n", nightCount);
     
     // Calculate morning forecast summary
     Serial.println("[DEBUG] Calculating morning forecast summary");
@@ -767,6 +916,10 @@ void WeatherService::calculateDailyForecasts() {
         morningForecast.avgTemp = totalTemp / morningCount;
         morningForecast.avgPop = totalPop / morningCount;
         morningForecast.iconCode = getMostFrequentIcon(morningForecasts, morningCount);
+        
+        Serial.printf("[INFO] Morning forecast: %.1f°C, PoP: %.0f%%, icon: %s\n",
+                    morningForecast.avgTemp, morningForecast.avgPop * 100, 
+                    morningForecast.iconCode.c_str());
         
         Serial.printf("[INFO] Morning forecast summary: Avg Temp: %.1f°C, Avg PoP: %.0f%%, Icon: %s (using %d hourly samples)\n", 
                      morningForecast.avgTemp, morningForecast.avgPop * 100, 
@@ -805,24 +958,68 @@ void WeatherService::calculateDailyForecasts() {
         afternoonForecast.avgPop = totalPop / afternoonCount;
         afternoonForecast.iconCode = getMostFrequentIcon(afternoonForecasts, afternoonCount);
         
-        Serial.printf("[INFO] Afternoon forecast summary: Avg Temp: %.1f°C, Avg PoP: %.0f%%, Icon: %s (using %d hourly samples)\n", 
-                     afternoonForecast.avgTemp, afternoonForecast.avgPop * 100, 
-                     afternoonForecast.iconCode.c_str(), afternoonCount);
+        Serial.printf("[INFO] Afternoon forecast: %.1f°C, PoP: %.0f%%, icon: %s\n",
+                    afternoonForecast.avgTemp, afternoonForecast.avgPop * 100, 
+                    afternoonForecast.iconCode.c_str());
     } else {
-        Serial.println("[WARNING] No hourly data available for afternoon forecast");
+        Serial.println("[WARNING] No afternoon forecast data available");
         afternoonForecast.avgTemp = 0;
         afternoonForecast.avgPop = 0;
-        afternoonForecast.iconCode = "01d"; // Default sunny
+        afternoonForecast.iconCode = "01d";
+    }
+    
+    // Calculate night forecast summary
+    Serial.println("[DEBUG] Calculating night forecast summary");
+    if (nightCount > 0 && nightForecasts != nullptr) {
+        float totalTemp = 0;
+        float totalPop = 0;
+        
+        Serial.println("[DEBUG] Night forecast inputs:");
+        for (int i = 0; i < nightCount; i++) {
+            totalTemp += nightForecasts[i].temp;
+            totalPop += nightForecasts[i].pop;
+            
+            // Convert timestamp to readable format
+            time_t timestamp = nightForecasts[i].dt;
+            struct tm forecastTime;
+            localtime_r(&timestamp, &forecastTime);
+            char timeStr[20];
+            strftime(timeStr, sizeof(timeStr), "%H:%M %d.%m.%Y", &forecastTime);
+            
+            Serial.printf("[DEBUG] Night input #%d: %s, %.1f°C, %.0f%%, icon=%s\n",
+                        i, timeStr, nightForecasts[i].temp, 
+                        nightForecasts[i].pop * 100, nightForecasts[i].weather_icon.c_str());
+        }
+        
+        nightForecast.avgTemp = totalTemp / nightCount;
+        nightForecast.avgPop = totalPop / nightCount;
+        nightForecast.iconCode = getMostFrequentIcon(nightForecasts, nightCount);
+        
+        // Ensure night icons use the night variant if not already set
+        if (nightForecast.iconCode.endsWith("d")) {
+            nightForecast.iconCode.setCharAt(nightForecast.iconCode.length() - 1, 'n');
+        }
+        
+        Serial.printf("[INFO] Night forecast: %.1f°C, PoP: %.0f%%, icon: %s\n",
+                    nightForecast.avgTemp, nightForecast.avgPop * 100, 
+                    nightForecast.iconCode.c_str());
+    } else {
+        Serial.println("[WARNING] No night forecast data available");
+        nightForecast.avgTemp = 0;
+        nightForecast.avgPop = 0;
+        nightForecast.iconCode = "01n";
     }
     
     // Cleanup - only delete if they were allocated
     if (morningForecasts != nullptr) {
         delete[] morningForecasts;
-        morningForecasts = nullptr;
     }
     
     if (afternoonForecasts != nullptr) {
         delete[] afternoonForecasts;
-        afternoonForecasts = nullptr;
+    }
+    
+    if (nightForecasts != nullptr) {
+        delete[] nightForecasts;
     }
 }
