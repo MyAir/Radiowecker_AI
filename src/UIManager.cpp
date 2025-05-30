@@ -65,9 +65,10 @@ void UIManager::showMainScreen() {
 }
 
 void UIManager::updateTime(const char* timeStr) {
-    static uint32_t lastUpdate = 0;
+    static uint32_t lastDebugLog = 0;
     uint32_t now = millis();
     
+    // Safety checks
     if (!timeLabel) {
         static uint32_t lastErrorLog = 0;
         if (now - lastErrorLog > 5000) {  // Log error max every 5 seconds
@@ -77,38 +78,40 @@ void UIManager::updateTime(const char* timeStr) {
         return;
     }
     
-    if (!timeStr) {
-        Serial.println("[WARNING] Time string is null!");
+    if (!timeStr || *timeStr == '\0') {
+        static uint32_t lastWarnLog = 0;
+        if (now - lastWarnLog > 10000) {  // Log warning max every 10 seconds
+            Serial.println("[WARNING] Time string is null or empty!");
+            lastWarnLog = now;
+        }
         return;
     }
     
-    // Only update if the time has actually changed and at least 100ms has passed
+    // Get current text safely
     const char* currentText = lv_label_get_text(timeLabel);
+    
+    // Only update if the time has actually changed
     if (currentText && strcmp(currentText, timeStr) == 0) {
-        return;
+        return;  // No need to update if text is the same
     }
     
-    // Debug output
-    // if (now - lastUpdate >= 1000) {  // Log at most once per second
-    //     Serial.printf("[DEBUG] Updating time from '%s' to '%s'\n", 
-    //                  currentText ? currentText : "NULL", timeStr);
-    //     lastUpdate = now;
-    // }
+    // Debug output (at most once per second)
+    if (now - lastDebugLog >= 1000) {
+        Serial.printf("[DEBUG] Updating time from '%s' to '%s'\n", 
+                     currentText ? currentText : "NULL", timeStr);
+        lastDebugLog = now;
+    }
     
     // Update the label text
     lv_label_set_text(timeLabel, timeStr);
     
-    // Invalidate the time label
-    lv_obj_invalidate(timeLabel);
+    // Invalidate only the time label area
+    lv_area_t coords;
+    lv_obj_get_coords(timeLabel, &coords);
+    lv_obj_invalidate_area(lv_scr_act(), &coords);
     
-    // Always do a refresh to ensure updates work properly
-    // This is more reliable, though it may have minimal flicker
-    lv_refr_now(lv_disp_get_default());
-    
-    // Update debug tracking
-    if (now - lastUpdate >= 1000) {
-        lastUpdate = now;
-    }
+    // Force a display refresh to ensure the update is visible
+    lv_refr_now(NULL);
 }
 
 void UIManager::updateDate(const char* dateStr) {
